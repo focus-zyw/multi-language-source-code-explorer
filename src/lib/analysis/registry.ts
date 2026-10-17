@@ -3,6 +3,7 @@ import { pythonPlugin } from "./lang/python.ts";
 import { javascriptPlugin, typescriptPlugin } from "./lang/javascript.ts";
 import { goPlugin } from "./lang/go.ts";
 import { javaPlugin } from "./lang/java.ts";
+import { htmlPlugin } from "./lang/html.ts";
 import { vuePlugin } from "./lang/vue.ts";
 
 /**
@@ -10,7 +11,7 @@ import { vuePlugin } from "./lang/vue.ts";
  *  1. 实现 LanguagePlugin（extract / flowIR / analyzeVariables / resolveImport）
  *  2. 在此注册，并确保 tree-sitter-wasms 中存在对应 grammar
  */
-export const plugins: LanguagePlugin[] = [pythonPlugin, javascriptPlugin, typescriptPlugin, goPlugin, javaPlugin, vuePlugin];
+export const plugins: LanguagePlugin[] = [pythonPlugin, javascriptPlugin, typescriptPlugin, goPlugin, javaPlugin, vuePlugin, htmlPlugin];
 
 export function extensionOf(path: string): string {
   const base = path.split("/").pop() ?? path;

@@ -48,6 +48,7 @@ export function ImportReport({ project, onClose }: { project: ProjectInfo; onClo
                 <li>方法 {st.symbols.method}</li>
                 <li>类 {st.symbols.class}</li>
                 <li>测试用例 {st.symbols.test}</li>
+                {!!st.symbols.element && <li>HTML 结构节点 {st.symbols.element}</li>}
               </ul>
               {st.syntaxErrorFiles > 0 && <p className="mt-2 text-xs text-amber-300">{st.syntaxErrorFiles} 个文件含语法错误，解析可能不完整（文件树中标 ⚠）</p>}
             </div>

@@ -72,10 +72,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const truncated = source.length > MAX_SOURCE_CHARS;
   if (truncated) source = source.slice(0, MAX_SOURCE_CHARS);
   const m = sym.metrics;
+  const structural = sym.kind === "element";
   const facts = [
     `签名：${sym.signature}`,
-    `位置：${file.path}，${sym.qualifiedName}；调用行号相对于当前方法，所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“方法内第 N 行”。`,
-    `圈复杂度 ${m.complexity}，分支 ${m.branches}，循环 ${m.loops}，异常处理 ${m.handlers}，return ${m.returns}，throw/raise ${m.throws}`,
+    structural ? `位置：${file.path}，${sym.qualifiedName}；所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“片段内第 N 行”。` : `位置：${file.path}，${sym.qualifiedName}；调用行号相对于当前方法，所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“方法内第 N 行”。`,
+    ...(structural ? ["这是文档包含关系，不能当作函数调用或执行步骤。仅依据当前片段与文件名讲解，属性的运行时行为需说明上下文限制。"] : [`圈复杂度 ${m.complexity}，分支 ${m.branches}，循环 ${m.loops}，异常处理 ${m.handlers}，return ${m.returns}，throw/raise ${m.throws}`]),
     ...(sym.docstring ? [`文档注释：${sym.docstring.slice(0, 400)}`] : []),
   ];
   const callLines = calls.map((c) => {
@@ -93,7 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         language: file.language,
         filePath: file.path,
         qualifiedName: sym.qualifiedName,
-        kind: sym.kind === "class" ? "类" : sym.kind === "test" ? "测试用例" : "函数/方法",
+        kind: sym.kind === "element" ? "HTML 结构节点" : sym.kind === "class" ? "类" : sym.kind === "test" ? "测试用例" : "函数/方法",
         source,
         truncated,
         facts,

@@ -157,9 +157,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   }, [sp, router, pathname]);
 
   const selectFromTree = useCallback((id: number) => {
-    if (exploring) changeView("explore", id, true);
+    if (tree.symbols.find((s) => s.id === id)?.kind === "element") changeView("source", id);
+    else if (exploring) changeView("explore", id, true);
     else navigate(id);
-  }, [exploring, changeView, navigate]);
+  }, [exploring, changeView, navigate, tree.symbols]);
 
   const inspectCall = useCallback((ownerId: number, refId: number) => {
     navigate(ownerId);
@@ -224,12 +225,13 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const note = navNote && navNote.forId === selectedId ? navNote : null;
   const focus = focusRef && focusRef.forId === selectedId ? focusRef.id : null;
 
+  const structural = shown?.symbol.kind === "element";
   const tabs: { key: Tab; label: string; count?: string }[] = [
     { key: "explain", label: "讲解" },
-    { key: "refs", label: "引用", count: shown ? `${shown.outgoing.length}·${shown.incoming.length}` : undefined },
-    { key: "tests", label: "关联测试", count: shown ? String(new Set(shown.tests.map((t) => t.otherSymbolId)).size) : undefined },
-    { key: "flow", label: "流程图" },
-    { key: "vars", label: "变量" },
+    ...(!structural ? [{ key: "refs" as const, label: "引用", count: shown ? `${shown.outgoing.length}·${shown.incoming.length}` : undefined },
+    { key: "tests" as const, label: "关联测试", count: shown ? String(new Set(shown.tests.map((t) => t.otherSymbolId)).size) : undefined },
+    { key: "flow" as const, label: "流程图" },
+    { key: "vars" as const, label: "变量" }] : []),
   ];
 
   return (
@@ -283,7 +285,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
             <div className="mx-auto max-w-2xl">
               <h2 className="text-xl font-semibold text-white">开始浏览 {project.name}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                在左侧文件树选择一个函数/方法，或搜索名称。阅读源码时，带下划线的调用可以点击跳转；
+                在左侧文件树选择一个函数、方法或结构节点，或搜索名称。阅读源码时，带下划线的调用可以点击跳转；
                 下划线样式表示解析可信度。
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -347,7 +349,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 )}
                 <div className="flex shrink-0 rounded-md bg-slate-900 p-0.5 text-xs">
                   <button onClick={() => setMode("method")} className={`rounded px-2 py-1 ${mode === "method" ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400"}`}>
-                    仅方法
+                    {structural ? "当前节点" : "仅方法"}
                   </button>
                   <button onClick={() => setMode("file")} className={`rounded px-2 py-1 ${mode === "file" ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400"}`}>
                     整个文件
@@ -384,12 +386,14 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-800 bg-slate-950/70 px-3 py-1.5 text-[11px] text-slate-400">
+                {structural ? <span>结构节点表示文档包含关系；可在左侧展开，或点击讲解中的子节点继续浏览。</span> : <>
                 <span>点击带下划线的调用跳转：</span>
                 <span className="border-b-2 border-emerald-400">确定</span>
                 <span className="border-b-2 border-sky-400">推断</span>
                 <span className="border-b-2 border-dashed border-amber-400">猜测（多候选）</span>
                 <span className="border-b-2 border-dotted border-slate-500">外部</span>
                 <span className="underline decoration-rose-400 decoration-wavy">无法解析</span>
+                </>}
               </div>
               </div>
             </section>
@@ -401,7 +405,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     <button
                       key={t.key}
                       onClick={() => setTab(t.key)}
-                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${tab === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${(structural ? "explain" : tab) === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
                     >
                       {t.label}
                       {t.count !== undefined && <span className="ml-1 text-[11px] text-slate-500">{t.count}</span>}
@@ -412,10 +416,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                   {wide ? "⇥ 收窄" : "⇤ 放宽"}
                 </button>
               </div>
-              <div className={`min-h-0 flex-1 ${tab === "flow" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
+              <div className={`min-h-0 flex-1 ${!structural && tab === "flow" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
                 {!shown ? (
                   <div className="p-8 text-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
-                ) : tab === "explain" ? (
+                ) : structural || tab === "explain" ? (
                   <ExplainPanel projectId={project.id} detail={shown} onNavigate={(id) => navigate(id)} onAiUpdate={onAiUpdate} />
                 ) : tab === "refs" ? (
                   <RefsPanel detail={shown} focusRefId={focus} onNavigate={navigate} onHighlight={onHighlight} />

@@ -52,6 +52,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
   const stop = () => explanationTasks.stop(taskKey);
   const elapsedSeconds = currentRequest ? Math.max(0, Math.floor((now - currentRequest.startedAt) / 1000)) : 0;
 
+  const structural = s.kind === "element";
   const m = s.metrics;
   const unresolvedImports = file.imports.filter((i) => i.kind === "unresolved");
 
@@ -73,7 +74,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
             </Chip>
           ))}
           <Chip title="行数">{m.loc} 行</Chip>
-          {s.kind !== "class" && (
+          {!structural && s.kind !== "class" && (
             <Chip tone={m.complexity > 10 ? "rose" : m.complexity > 5 ? "amber" : "emerald"} title="圈复杂度 = 1 + 分支 + 循环 + 异常处理 + 布尔运算">
               复杂度 {m.complexity}
             </Chip>
@@ -106,7 +107,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
 
       {s.docstring && (
         <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <h3 className="mb-1 text-[1em] font-semibold text-slate-200">源码中的文档注释</h3>
+          <h3 className="mb-1 text-[1em] font-semibold text-slate-200">{structural ? "结构说明" : "源码中的文档注释"}</h3>
           <pre className="whitespace-pre-wrap font-sans text-[1em] leading-[1.7] text-slate-400">{s.docstring}</pre>
         </section>
       )}
@@ -128,13 +129,13 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
         </div>
         <p className="mb-3 leading-[1.7] text-slate-400">
           {backend === "agent"
-            ? "通过本机 Codex 生成讲解，使用已有 CLI 登录。本次只提供当前方法源码和静态分析事实。"
+            ? "通过本机 Codex 生成讲解，使用已有 CLI 登录。本次只提供当前节点源码和静态分析事实。"
             : `通过模型 API 生成讲解${selected.model ? `（${selected.model}）` : ""}，密钥仅在服务端读取。`}
         </p>
         {cached ? (
           <>
             <Markdown text={cached.explanation} />
-            {cached.relativeLines && <p className="mt-2 text-[11px] text-slate-500">讲解中的“方法内行号”以当前方法的第一行为第 1 行。</p>}
+            {cached.relativeLines && <p className="mt-2 text-[11px] text-slate-500">讲解中的“{structural ? "片段" : "方法"}内行号”以当前{structural ? "节点" : "方法"}的第一行为第 1 行。</p>}
             <p className="mt-3 text-[11px] text-slate-500">
               由 {cached.model ?? "模型"} 生成{cached.generatedAt ? ` · ${new Date(cached.generatedAt).toLocaleString("zh-CN")}` : ""} · AI 内容可能有误，请对照源码阅读
             </p>
@@ -157,9 +158,9 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
         </div>
       </section>
 
-      {s.kind === "class" && detail.children.length > 0 && (
+      {(s.kind === "class" || structural) && detail.children.length > 0 && (
         <section>
-          <h3 className="mb-1.5 text-sm font-semibold text-slate-200">成员（{detail.children.length}）</h3>
+          <h3 className="mb-1.5 text-sm font-semibold text-slate-200">{structural ? "子节点" : "成员"}（{detail.children.length}）</h3>
           <ul className="space-y-0.5">
             {detail.children.map((c) => (
               <li key={c.id}>

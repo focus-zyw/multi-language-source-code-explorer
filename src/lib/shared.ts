@@ -11,7 +11,7 @@ export interface SkippedInfo {
 }
 
 export interface ProjectStats {
-  symbols: { function: number; method: number; class: number; test: number };
+  symbols: { function: number; method: number; class: number; test: number; element?: number };
   refs: { exact: number; inferred: number; heuristic: number; external: number; unresolved: number };
   testLinks: { exact: number; inferred: number; indirect: number; heuristic: number };
   syntaxErrorFiles: number;

@@ -38,6 +38,7 @@ export function TestConfidenceBadge({ level, score }: { level: string; score?: n
 }
 
 const KIND_META: Record<string, { icon: string; cls: string; label: string }> = {
+  element: { icon: "◇", cls: "text-orange-300", label: "结构节点" },
   function: { icon: "ƒ", cls: "text-indigo-300", label: "函数" },
   method: { icon: "m", cls: "text-fuchsia-300", label: "方法" },
   class: { icon: "C", cls: "text-amber-300", label: "类" },

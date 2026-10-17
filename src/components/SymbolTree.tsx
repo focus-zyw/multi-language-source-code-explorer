@@ -69,6 +69,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
     walk(dirTree, 0);
     return s;
   });
+  const [closedNodes, setClosedNodes] = useState<Set<number>>(() => new Set());
   const [openFiles, setOpenFiles] = useState<Set<number>>(() => new Set(tree.files.length <= 12 ? tree.files.map((f) => f.id) : []));
 
   // 选中符号时展开其所在目录/文件并滚动到可见
@@ -77,15 +78,23 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
     const sym = symById.get(selectedId);
     const file = sym ? fileById.get(sym.fileId) : null;
     if (!file) return;
+    const expand = setTimeout(() => {
     setOpenFiles((prev) => (prev.has(file.id) ? prev : new Set(prev).add(file.id)));
+    setClosedNodes((previous) => {
+      const next = new Set(previous);
+      let parent = sym?.parentId;
+      while (parent != null) { next.delete(parent); next.add(-parent); parent = symById.get(parent)?.parentId; }
+      return next;
+    });
     const parts = file.path.split("/");
     setOpenDirs((prev) => {
       const next = new Set(prev);
       for (let i = 0; i < parts.length - 1; i++) next.add(parts.slice(0, i + 1).join("/"));
       return next;
     });
+    }, 0);
     const t = setTimeout(() => document.getElementById(`sym-${selectedId}`)?.scrollIntoView({ block: "nearest" }), 60);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(expand); clearTimeout(t); };
   }, [selectedId, symById, fileById]);
 
   const q = query.trim().toLowerCase();
@@ -120,22 +129,28 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
       return n;
     });
 
+  const toggleNode = (id: number, collapsed: boolean) => setClosedNodes((previous) => { const next = new Set(previous); if (collapsed) { next.delete(id); next.add(-id); } else { next.add(id); next.delete(-id); } return next; });
+
   const renderSym = (s: TreeSymbol, depth: number): ReactNode => {
     const kids = childrenOf.get(s.id) ?? [];
+    const structural = s.kind === "element";
+    const collapsed = closedNodes.has(s.id) || (depth > 3 && !closedNodes.has(-s.id));
     return (
       <Fragment key={s.id}>
+        <div className="flex items-center" style={{ paddingLeft: 8 + depth * 14 }}>
+        {structural && kids.length > 0 && <button type="button" aria-label={collapsed ? "展开子节点" : "收起子节点"} aria-expanded={!collapsed} onClick={() => toggleNode(s.id, collapsed)} className="shrink-0 px-1 text-slate-400">{collapsed ? "▸" : "▾"}</button>}
         <button
           id={`sym-${s.id}`}
           onClick={() => onSelect(s.id)}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          className={`flex w-full items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25 text-white" : "text-slate-300"}`}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25 text-white" : "text-slate-300"}`}
           title={s.qualifiedName}
         >
           <KindIcon kind={s.kind} />
           <span className="min-w-0 flex-1 truncate">{s.name}</span>
           <span className="shrink-0 text-[10px] text-slate-600">{s.startLine}</span>
         </button>
-        {kids.map((k) => renderSym(k, depth + 1))}
+        </div>
+        {(!structural || !collapsed) && kids.map((k) => renderSym(k, depth + 1))}
       </Fragment>
     );
   };
@@ -202,7 +217,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索函数 / 方法 / 文件…"
+          placeholder="搜索函数 / 结构节点 / 文件…"
           className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400"
         />
         <div className="flex gap-1">
