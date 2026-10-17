@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       "./node_modules/tree-sitter-wasms/out/tree-sitter-typescript.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-tsx.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-go.wasm",
+      "./node_modules/tree-sitter-wasms/out/tree-sitter-java.wasm",
     ],
   },
   poweredByHeader: false,

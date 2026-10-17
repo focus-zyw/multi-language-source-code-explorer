@@ -6,6 +6,7 @@ import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
 import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
 import "monaco-editor/esm/vs/basic-languages/go/go.contribution";
+import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import { sliceLines, type CodeViewerProps, type ViewerRef } from "./viewer-types";
 
 // 只读源码浏览只需要基础的编辑器 worker；不加载 TS/JSON 等语言服务（无需执行或类型检查项目代码）

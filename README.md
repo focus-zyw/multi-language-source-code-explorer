@@ -2,7 +2,7 @@
 
 独立的多语言源码学习 Web 应用：**导入源码项目（本地路径、文件夹或 ZIP）→ 浏览函数/方法 → 阅读源码与讲解 → 查看关联测试 → 点击引用跳转 → 单方法流程图、关键变量定义与引用**。
 
-当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go**；解析层是语言插件架构，可扩展其他语言。
+当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java**；解析层是语言插件架构，可扩展其他语言。
 所有跨文件关系都带**可信度标注**，猜测不会被伪装成事实；无法解析的项会明确列出。
 
 ## 快速启动
@@ -195,3 +195,10 @@ npx next typegen && npm exec tsc -- --noEmit && npm run build
 同目录、相同 package 的跨文件定义与接收者类型按推断处理；模块导入采用目录后缀匹配，不读取 go.mod 或执行 Go。构建标签、接口动态分派、泛型实例化、函数值/匿名闭包内部调用、defer 执行顺序及通道调度不做运行时推演。流程中的 go / defer 作为源码步骤展示；字段定义只查当前文件。
 
 验证：node --test tests/go.test.ts；启动本地应用后运行 node --test tests/go.integration.test.mjs。
+## Java 支持
+
+支持 .java 的类/接口/枚举、带方法体的方法与构造方法、注解、Javadoc、参数、继承与导入、流程图和变量。识别 JUnit Test / ParameterizedTest 等测试注解，沿用测试关联、AI 讲解和指纹缓存；项目总览可识别 static void main 与常见 Spring 路由注解候选。
+
+同包类型、源码目录导入、继承及方法调用标为推断；同类同名重载保留全部候选，不按方法名选择第一个。当前不执行 javac、不解析 Maven/Gradle 依赖，不做完整参数类型/泛型推导、虚方法动态分派、Lombok 生成代码或反射分析。无方法体的声明只保留所属类型，匿名类与 lambda 内部逻辑不展开，finally 路径沿用简化控制流。
+
+验证：node --test tests/java.test.ts；启动本地应用后运行 node --test tests/java.integration.test.mjs。

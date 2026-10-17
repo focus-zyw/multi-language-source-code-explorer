@@ -30,7 +30,8 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
   for (const item of symbols) {
     const file = byFile.get(item.fileId);
     if (!file || item.isTest || file.isTest || /(^|\/)(?:tests?|__tests__|fixtures|__fixtures__)(\/|$)/i.test(file.path.replaceAll("\\", "/"))) continue;
-    if (item.parentId !== null || item.kind !== "function") continue;
+    const javaMethod = /\.java$/.test(file.path) && item.kind === "method" && item.name !== "constructor";
+    if ((item.parentId !== null || item.kind !== "function") && !javaMethod) continue;
     const path = file.path.replaceAll("\\", "/");
     const base = path.split("/").at(-1)!;
     const isDefault = /^export\s+default\b/.test(item.signature);
@@ -40,7 +41,11 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
     let reason = "";
     let confidence: ProjectEntry["confidence"] = "inferred";
 
-    if (/(?:^|\/)app\/(?:.*\/)?route\.[cm]?[jt]sx?$/.test(path) && METHODS.has(item.name) && exported) {
+    if (javaMethod && item.name === "main" && /\bstatic\s+void\s+main\s*\(/.test(item.signature)) {
+      group = "startup"; reason = "按 Java static void main 方法签名识别，未验证构建配置"; confidence = "heuristic";
+    } else if (javaMethod && item.decorators.some((d) => /^@(?:[\w.]*\.)?(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\b/.test(d))) {
+      group = "api"; reason = "按 Java 路由注解约定识别，未验证框架运行时注册";
+    } else if (/(?:^|\/)app\/(?:.*\/)?route\.[cm]?[jt]sx?$/.test(path) && METHODS.has(item.name) && exported) {
       group = "api"; label = `${item.name} · ${path}`; reason = "App Router 的 route 文件中导出的 HTTP 处理方法";
     } else if (/(?:^|\/)pages\/api\/.+\.[cm]?[jt]sx?$/.test(path) && isDefault) {
       group = "api"; reason = "Pages Router 的 API 文件默认导出";
