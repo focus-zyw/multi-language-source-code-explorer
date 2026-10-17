@@ -2,7 +2,7 @@ import type Parser from "web-tree-sitter";
 
 export type SyntaxNode = Parser.SyntaxNode;
 
-export type LanguageId = "python" | "javascript" | "typescript";
+export type LanguageId = "python" | "javascript" | "typescript" | "go";
 export type SymbolKind = "function" | "method" | "class" | "test";
 
 /** 关系可信度：exact=语法/导入绑定可确定；inferred=基于类型标注/构造推断；heuristic=仅按名称等启发式猜测 */
@@ -102,6 +102,8 @@ export interface ImportBinding {
 }
 
 export interface ExtractResult {
+  /** Package namespace for languages whose declarations span sibling files. */
+  moduleName?: string | null;
   symbols: ExtractedSymbol[];
   calls: ExtractedCall[];
   imports: ImportBinding[];

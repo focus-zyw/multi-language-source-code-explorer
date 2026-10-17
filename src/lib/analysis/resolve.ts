@@ -108,6 +108,8 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   };
 
   const recs: SymRec[][] = files.map((f) => f.extract.symbols.map((sym) => ({ id: symbolIds[f.idx][sym.localId], fileIdx: f.idx, sym })));
+  const sameLanguage = (a: number, b: number) => files[a].language === files[b].language || ["javascript", "typescript"].includes(files[a].language) && ["javascript", "typescript"].includes(files[b].language);
+  const sameGoPackage = (a: number, b: number) => files[a].language === "go" && files[b].language === "go" && dirOf(files[a].path) === dirOf(files[b].path) && !!files[a].extract.moduleName && files[a].extract.moduleName === files[b].extract.moduleName;
   const infos: FileInfo[] = files.map((f) => {
     const info: FileInfo = {
       top: new Map(),
@@ -212,6 +214,10 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     if (name === "default") return fx.defaultRec ? { rec: fx.defaultRec, level: "exact" } : null;
     const top = fx.top.get(name)?.[0];
     if (top) return { rec: top, level: "exact" };
+    if (files[fi].language === "go") {
+      const siblings = recs.flat().filter((r) => r.fileIdx !== fi && sameGoPackage(fi, r.fileIdx) && r.sym.parentLocalId === null && r.sym.container === null && r.sym.kind !== "test" && r.sym.name === name);
+      if (siblings.length === 1) return { rec: siblings[0], level: "inferred" };
+    }
     for (const b of fx.bindings.get(name) ?? []) {
       const r = resolveBinding(fi, b, depth + 1);
       if (r.kind === "symbol") return { rec: r.rec, level: r.level };
@@ -245,7 +251,9 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
         if (hit && hit.rec.sym.kind === "class") return { rec: hit.rec, level: "inferred" };
       }
     }
-    const g = globalClasses.get(name);
+    const packageClasses = (globalClasses.get(name) ?? []).filter((r) => sameGoPackage(fi, r.fileIdx));
+    if (packageClasses.length === 1) return { rec: packageClasses[0], level: "inferred" };
+    const g = globalClasses.get(name)?.filter((r) => sameLanguage(fi, r.fileIdx));
     if (g && g.length === 1) return { rec: g[0], level: "heuristic" };
     return null;
   };
@@ -256,6 +264,10 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     visited.add(cls.id);
     const own = infos[cls.fileIdx].byContainer.get(cls.sym.name)?.get(method)?.[0];
     if (own) return { rec: own, level: "exact", via: depth === 0 ? null : cls.sym.name };
+    if (files[cls.fileIdx].language === "go") {
+      const siblings = (globalMethods.get(method) ?? []).filter((r) => sameGoPackage(cls.fileIdx, r.fileIdx) && r.sym.container === cls.sym.name);
+      if (siblings.length === 1) return { rec: siblings[0], level: "inferred", via: null };
+    }
     let externalBase: string | null = null;
     for (const baseText of cls.sym.bases) {
       const baseName = baseText.split(".").pop()!.replace(/<.*$/, "").replace(/\[.*$/, "");
@@ -317,7 +329,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   const heuristicByMethod = (fi: number, owner: ExtractedSymbol, call: ExtractedCall, why: string): Outcome => {
     const name = call.name!;
     const plugin = files[fi].plugin;
-    const cands = (globalMethods.get(name) ?? []).filter((r) => r.sym.kind !== "test");
+    const cands = (globalMethods.get(name) ?? []).filter((r) => r.sym.kind !== "test" && sameLanguage(fi, r.fileIdx));
     if (!cands.length) {
       if (plugin.builtinMethods.has(name)) {
         return { resolution: "external", reason: `项目内没有名为 ${name} 的方法；按名称推测为内建/标准库方法（未验证）`, targets: [] };
@@ -374,6 +386,10 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
       // 2. 同文件顶层
       const top = fx.top.get(name)?.[0];
       if (top && !fx.bindings.has(name)) return hit(fi, top, "exact", `同文件定义（${f.path}:${top.sym.startLine}）`);
+      if (f.language === "go") {
+        const siblings = (globalTop.get(name) ?? []).filter((r) => sameGoPackage(fi, r.fileIdx));
+        if (siblings.length === 1) return hit(fi, siblings[0], "inferred", "同目录且 package 声明相同（未验证构建标签）");
+      }
       // 3. import 绑定
       const bs = fx.bindings.get(name);
       if (bs) {
@@ -398,7 +414,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
       // 5. 内建 / 全局
       if (plugin.builtinFunctions.has(name)) return { resolution: "external", reason: "语言内建或运行时全局函数/类", targets: [] };
       // 6. 项目内同名（启发式）
-      const g = (globalTop.get(name) ?? []).filter((r) => r.sym.kind === "function" || r.sym.kind === "class");
+      const g = (globalTop.get(name) ?? []).filter((r) => (r.sym.kind === "function" || r.sym.kind === "class") && sameLanguage(fi, r.fileIdx));
       if (g.length === 1) {
         const o = hit(fi, g[0], "heuristic", `项目内唯一同名定义（${pathOf(g[0])}），但当前文件未显式导入/定义，仅为猜测`);
         o.targets[0].score = 0.5;

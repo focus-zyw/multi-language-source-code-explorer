@@ -54,6 +54,8 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
       group = "pages"; reason = "按应用组件文件名与默认导出识别"; confidence = "heuristic";
     } else if (/^(?:middleware|proxy)\.[jt]s$/.test(base) && exported && (isDefault || item.name === base.split(".")[0])) {
       group = "startup"; reason = "按中间件文件名与导出声明识别";
+    } else if (/\.go$/.test(base) && item.name === "main" && /^func\s+main\s*\(\s*\)/.test(item.signature)) {
+      group = "startup"; reason = "按 Go main 函数签名识别入口候选，未验证 package 或构建配置"; confidence = "heuristic";
     } else if (/^(?:__main__|main|cli|server|index|app)\.(?:py|[cm]?[jt]sx?)$/.test(base) && /^(?:main|bootstrap|start|run|createApp)$/.test(item.name)) {
       group = "startup"; reason = "按启动文件与方法命名约定推测，尚未验证实际启动方式"; confidence = "heuristic";
     }

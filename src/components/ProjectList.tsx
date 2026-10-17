@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { ProjectListItem } from "@/lib/api-types";
 import { RescanButton } from "./RescanButton";
 
-const LANG_LABEL: Record<string, string> = { python: "Python", javascript: "JavaScript", typescript: "TypeScript" };
+import { LANGUAGE_LABELS as LANG_LABEL } from "@/lib/languages";
 
 export function ProjectList({ projects }: { projects: ProjectListItem[] }) {
   const router = useRouter();

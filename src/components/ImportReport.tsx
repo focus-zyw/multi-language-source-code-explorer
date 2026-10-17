@@ -3,7 +3,7 @@
 import type { ProjectInfo } from "@/lib/api-types";
 import { RESOLUTION_LABELS, SKIP_REASON_LABELS } from "@/lib/shared";
 
-const LANG: Record<string, string> = { python: "Python", javascript: "JavaScript", typescript: "TypeScript" };
+import { LANGUAGE_LABELS as LANG } from "@/lib/languages";
 
 export function ImportReport({ project, onClose }: { project: ProjectInfo; onClose: () => void }) {
   const st = project.stats;

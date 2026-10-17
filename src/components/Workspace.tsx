@@ -13,6 +13,7 @@ import { RescanButton } from "./RescanButton";
 import { SymbolTree } from "./SymbolTree";
 import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
+import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
 import { VarsPanel } from "./panels/VarsPanel";
@@ -244,7 +245,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         <div className="hidden gap-1.5 xl:flex">
           {Object.entries(project.languages).map(([l, n]) => (
             <Chip key={l}>
-              {l === "python" ? "Python" : l === "javascript" ? "JS" : "TS"} {n}
+              {LANGUAGE_SHORT_LABELS[l] ?? l} {n}
             </Chip>
           ))}
           <Chip>{project.symbolCount} 符号</Chip>

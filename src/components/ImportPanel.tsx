@@ -6,6 +6,7 @@ import { IGNORED_DIRS, LIMITS, classifyPath, commonRoot, normalizeEntryPath } fr
 import { SKIP_REASON_LABELS } from "@/lib/shared";
 import type { LocalFolderListing } from "@/lib/api-types";
 import { LocalFolderPicker } from "./LocalFolderPicker";
+import { LANGUAGE_LABELS } from "@/lib/languages";
 
 interface FolderItem {
   file: File;
@@ -209,7 +210,7 @@ export function ImportPanel() {
     <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl">
       <h2 className="text-base font-semibold text-slate-100">导入源码项目</h2>
       <p className="mt-1 text-xs leading-5 text-slate-400">
-        支持 Python / JavaScript / TypeScript。仅做静态语法解析，<b className="text-slate-200">不会执行</b>项目中的任何代码；
+        支持 {Object.values(LANGUAGE_LABELS).join(" / ")}。仅做静态语法解析，<b className="text-slate-200">不会执行</b>项目中的任何代码；
         node_modules、.git、二进制与超大文件会被自动跳过。
       </p>
 
