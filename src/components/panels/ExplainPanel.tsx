@@ -52,7 +52,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
   const stop = () => explanationTasks.stop(taskKey);
   const elapsedSeconds = currentRequest ? Math.max(0, Math.floor((now - currentRequest.startedAt) / 1000)) : 0;
 
-  const structural = s.kind === "element";
+  const structural = (s.kind === "element" || s.kind === "property");
   const m = s.metrics;
   const unresolvedImports = file.imports.filter((i) => i.kind === "unresolved");
 

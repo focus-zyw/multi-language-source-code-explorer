@@ -72,7 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const truncated = source.length > MAX_SOURCE_CHARS;
   if (truncated) source = source.slice(0, MAX_SOURCE_CHARS);
   const m = sym.metrics;
-  const structural = sym.kind === "element";
+  const structural = (sym.kind === "element" || sym.kind === "property");
   const facts = [
     `签名：${sym.signature}`,
     structural ? `位置：${file.path}，${sym.qualifiedName}；所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“片段内第 N 行”。` : `位置：${file.path}，${sym.qualifiedName}；调用行号相对于当前方法，所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“方法内第 N 行”。`,
@@ -94,7 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         language: file.language,
         filePath: file.path,
         qualifiedName: sym.qualifiedName,
-        kind: sym.kind === "element" ? "HTML 结构节点" : sym.kind === "class" ? "类" : sym.kind === "test" ? "测试用例" : "函数/方法",
+        kind: (sym.kind === "element" || sym.kind === "property") ? "文档结构/配置节点" : sym.kind === "class" ? "类" : sym.kind === "test" ? "测试用例" : "函数/方法",
         source,
         truncated,
         facts,

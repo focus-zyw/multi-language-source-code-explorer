@@ -23,7 +23,7 @@ export function fingerprintExplanation(input: ExplanationFingerprintInput, absol
   const calls = [...input.calls].sort((a, b) => a.line - b.line || (a.col ?? 0) - (b.col ?? 0)).map((call) => ({ kind: call.kind, calleeText: call.calleeText, line: call.line - symbol.startLine + 1,
     resolution: call.resolution, targets: call.targets.map((target) => ({ filePath: target.filePath.replaceAll("\\", "/"), name: target.name, kind: target.kind, confidence: target.confidence }))
       .sort((a, b) => JSON.stringify(canonical(a)).localeCompare(JSON.stringify(canonical(b)))) }));
-  const value = { version: input.language === "html" ? 2 : 1, filePath: input.filePath.replaceAll("\\", "/"), language: input.language, source: input.source.replace(/\r\n?/g, "\n"),
+  const value = { version: ["html", "json"].includes(input.language) ? 2 : 1, filePath: input.filePath.replaceAll("\\", "/"), language: input.language, source: input.source.replace(/\r\n?/g, "\n"),
     qualifiedName: symbol.qualifiedName, kind: symbol.kind, signature: symbol.signature, docstring: symbol.docstring, metrics: symbol.metrics, calls,
     ...(absoluteLines ? { position: [symbol.startLine, symbol.endLine, symbol.startCol, symbol.endCol] } : {}) };
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");

@@ -47,6 +47,7 @@ export function ImportReport({ project, onClose }: { project: ProjectInfo; onClo
                 <li>函数 {st.symbols.function}</li>
                 <li>方法 {st.symbols.method}</li>
                 <li>类 {st.symbols.class}</li>
+                {!!st.symbols.property && <li>JSON 配置/数据节点 {st.symbols.property}</li>}
                 <li>测试用例 {st.symbols.test}</li>
                 {!!st.symbols.element && <li>HTML 结构节点 {st.symbols.element}</li>}
               </ul>

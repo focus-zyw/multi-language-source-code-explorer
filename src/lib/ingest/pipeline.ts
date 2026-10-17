@@ -171,7 +171,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
     const savedExplanations = args.replaceProjectId !== undefined ? await snapshotExplanations(tx, args.replaceProjectId) : null;
 
     const stats: ProjectStats = {
-      symbols: { function: 0, method: 0, class: 0, test: 0, element: 0 },
+      symbols: { function: 0, method: 0, class: 0, test: 0, element: 0, property: 0 },
       refs: { exact: 0, inferred: 0, heuristic: 0, external: 0, unresolved: 0 },
       testLinks: { exact: 0, inferred: 0, indirect: 0, heuristic: 0 },
       syntaxErrorFiles: units.filter((u) => u.extract.hasSyntaxErrors).length,

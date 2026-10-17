@@ -133,7 +133,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
 
   const renderSym = (s: TreeSymbol, depth: number): ReactNode => {
     const kids = childrenOf.get(s.id) ?? [];
-    const structural = s.kind === "element";
+    const structural = (s.kind === "element" || s.kind === "property");
     const collapsed = closedNodes.has(s.id) || (depth > 3 && !closedNodes.has(-s.id));
     return (
       <Fragment key={s.id}>

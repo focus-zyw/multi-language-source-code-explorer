@@ -367,7 +367,7 @@ export async function getAnalysis(projectId: number, symbolId: number): Promise<
   const [file] = await db.select().from(files).where(eq(files.id, sym.fileId)).limit(1);
   if (!file) return null;
   const notes: string[] = [];
-  if (sym.kind === "element") return { flow: null, variables: [], notes: ["此节点是文档结构，请从左侧展开子节点并查看讲解；不生成执行流程图或变量分析。"] };
+  if ((sym.kind === "element" || sym.kind === "property")) return { flow: null, variables: [], notes: ["此节点是文档结构，请从左侧展开子节点并查看讲解；不生成执行流程图或变量分析。"] };
   if (sym.kind === "class") {
     return { flow: null, variables: [], notes: ["类本身没有单方法流程图，请在左侧选择其方法。"] };
   }

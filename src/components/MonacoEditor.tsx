@@ -10,6 +10,20 @@ import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import "monaco-editor/esm/vs/basic-languages/html/html.contribution";
 import { sliceLines, type CodeViewerProps, type ViewerRef } from "./viewer-types";
 
+// Highlight JSON without loading schema services or fetching remote resources.
+if (!monaco.languages.getLanguages().some((language) => language.id === "json")) {
+  monaco.languages.register({ id: "json" });
+  monaco.languages.setMonarchTokensProvider("json", {
+    tokenizer: { root: [
+      [/"(?:[^"\\]|\\.)*"(?=\s*:)/, "string.key"],
+      [/"(?:[^"\\]|\\.)*"/, "string"],
+      [/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, "number"],
+      [/\b(?:true|false|null)\b/, "keyword"],
+      [/[{}\[\]]/, "delimiter.bracket"], [/[,:]/, "delimiter"],
+    ] },
+  });
+}
+
 // 只读源码浏览只需要基础的编辑器 worker；不加载 TS/JSON 等语言服务（无需执行或类型检查项目代码）
 if (typeof window !== "undefined") {
   const w = window as unknown as { MonacoEnvironment?: unknown };

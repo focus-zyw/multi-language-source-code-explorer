@@ -16,7 +16,7 @@ export const LIMITS = {
   maxSymbols: 80_000,
 } as const;
 
-export const SUPPORTED_EXTENSIONS = [".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".go", ".java", ".vue", ".html", ".htm"];
+export const SUPPORTED_EXTENSIONS = [".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts", ".go", ".java", ".vue", ".html", ".htm", ".json"];
 
 export const IGNORED_DIRS = new Set([
   "node_modules",

@@ -8,7 +8,7 @@ export interface StaticSummary {
 }
 
 export interface SummaryInput {
-  kind: "function" | "method" | "class" | "test" | "element";
+  kind: "function" | "method" | "class" | "test" | "element" | "property";
   name: string;
   qualifiedName: string;
   signature: string;
@@ -28,7 +28,7 @@ export interface SummaryInput {
   testCount: number;
 }
 
-const KIND_LABEL = { function: "函数", method: "方法", class: "类", test: "测试用例", element: "HTML 节点" } as const;
+const KIND_LABEL = { function: "函数", method: "方法", class: "类", test: "测试用例", element: "HTML 节点", property: "JSON 节点" } as const;
 
 export function buildStaticSummary(i: SummaryInput): StaticSummary {
   const m = i.metrics;
@@ -43,7 +43,7 @@ export function buildStaticSummary(i: SummaryInput): StaticSummary {
   bullets.push(`签名：${i.signature}`);
   if (i.decorators.length) bullets.push(`装饰器/注解：${i.decorators.join("、")}`);
 
-  if (i.kind === "element") {
+  if ((i.kind === "element" || i.kind === "property")) {
     bullets.push(`直接子节点 ${i.childCount} 个；范围 ${m.loc} 行。`);
     bullets.push("父子节点表示文档包含关系；不计算圈复杂度、变量或调用流程。");
     return { headline, bullets, source: "static" };

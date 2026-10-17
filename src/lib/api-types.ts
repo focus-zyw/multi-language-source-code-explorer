@@ -42,7 +42,7 @@ export interface TreeSymbol {
   id: number;
   fileId: number;
   parentId: number | null;
-  kind: "function" | "method" | "class" | "test" | "element";
+  kind: "function" | "method" | "class" | "test" | "element" | "property";
   name: string;
   qualifiedName: string;
   container: string | null;
@@ -116,7 +116,7 @@ export interface SymbolDetail {
     id: number;
     fileId: number;
     parentId: number | null;
-    kind: "function" | "method" | "class" | "test" | "element";
+    kind: "function" | "method" | "class" | "test" | "element" | "property";
     name: string;
     qualifiedName: string;
     container: string | null;

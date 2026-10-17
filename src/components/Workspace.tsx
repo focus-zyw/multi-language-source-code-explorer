@@ -157,7 +157,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   }, [sp, router, pathname]);
 
   const selectFromTree = useCallback((id: number) => {
-    if (tree.symbols.find((s) => s.id === id)?.kind === "element") changeView("source", id);
+    if (["element", "property"].includes(tree.symbols.find((s) => s.id === id)?.kind ?? "")) changeView("source", id);
     else if (exploring) changeView("explore", id, true);
     else navigate(id);
   }, [exploring, changeView, navigate, tree.symbols]);
@@ -225,7 +225,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const note = navNote && navNote.forId === selectedId ? navNote : null;
   const focus = focusRef && focusRef.forId === selectedId ? focusRef.id : null;
 
-  const structural = shown?.symbol.kind === "element";
+  const structural = ["element", "property"].includes(shown?.symbol.kind ?? "");
   const tabs: { key: Tab; label: string; count?: string }[] = [
     { key: "explain", label: "讲解" },
     ...(!structural ? [{ key: "refs" as const, label: "引用", count: shown ? `${shown.outgoing.length}·${shown.incoming.length}` : undefined },
