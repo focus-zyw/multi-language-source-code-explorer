@@ -2,7 +2,7 @@ import type Parser from "web-tree-sitter";
 
 export type SyntaxNode = Parser.SyntaxNode;
 
-export type LanguageId = "python" | "javascript" | "typescript" | "go" | "java";
+export type LanguageId = "python" | "javascript" | "typescript" | "go" | "java" | "vue";
 export type SymbolKind = "function" | "method" | "class" | "test";
 
 /** 关系可信度：exact=语法/导入绑定可确定；inferred=基于类型标注/构造推断；heuristic=仅按名称等启发式猜测 */
@@ -66,6 +66,7 @@ export interface ExtractedSymbol {
 export type ReceiverKind = "self" | "super" | "name" | "expr";
 
 export interface ExtractedCall {
+  origin?: "vue-template" | "vue-options";
   ownerLocalId: number;
   kind: "call" | "new" | "jsx";
   /** 被调名（最后一段标识符）；动态调用为 null */
@@ -102,6 +103,7 @@ export interface ImportBinding {
 }
 
 export interface ExtractResult {
+  warnings?: string[];
   /** Package namespace for languages whose declarations span sibling files. */
   moduleName?: string | null;
   symbols: ExtractedSymbol[];
@@ -216,6 +218,7 @@ export type ImportResolution =
   | { kind: "unresolved"; reason: string };
 
 export interface LanguagePlugin {
+  analysisNotes?: string[];
   id: LanguageId;
   label: string;
   extensions: string[];

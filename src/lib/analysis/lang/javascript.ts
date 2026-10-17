@@ -50,7 +50,7 @@ const BUILTIN_METHODS = new Set(
   ).split(" "),
 );
 
-const EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"];
+const EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"];
 
 const dirname = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
 
@@ -891,6 +891,7 @@ function flowIR(def: SyntaxNode, source: string): IRStmt[] {
     }
   };
 
+  if (def.type === "program") return blockIR(def);
   const body = def.childForFieldName("body");
   if (!body) return [];
   if (body.type === "statement_block") return blockIR(body);
@@ -928,7 +929,7 @@ function analyzeVariables(def: SyntaxNode, source: string): VariableInfo[] {
       vc.declare(t(id), id, { kind: "param", typeText: p.info.type, snippet: p.info.display });
     }
   }
-  const body = def.childForFieldName("body");
+  const body = def.type === "program" ? def : def.childForFieldName("body");
   if (!body) return vc.build(source);
 
   let classNode: SyntaxNode | null = null;
@@ -959,6 +960,7 @@ function analyzeVariables(def: SyntaxNode, source: string): VariableInfo[] {
   const fieldFirstWrite = new Map<string, SyntaxNode>();
 
   walk(body, (n) => {
+    if (def.type === "program" && n.id !== body.id && (FN_TYPES.has(n.type) || NESTED_DEF.has(n.type))) return false;
     if (n.id !== body.id && NESTED_DEF.has(n.type) && n.type !== "method_definition") return false;
     switch (n.type) {
       case "variable_declarator": {
@@ -1110,7 +1112,7 @@ function normalizePath(p: string): string | null {
 }
 
 function probe(base: string, index: FileIndex): string | null {
-  if (/\.[cm]?[jt]sx?$/.test(base) && index.has(base)) return base;
+  if (/(?:\.[cm]?[jt]sx?|\.vue)$/.test(base) && index.has(base)) return base;
   const stems = [base];
   const m = /^(.*)\.(js|jsx|mjs|cjs)$/.exec(base);
   if (m) stems.push(m[1]);

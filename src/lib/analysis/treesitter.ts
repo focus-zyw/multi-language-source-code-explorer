@@ -1,6 +1,7 @@
 import type Parser from "web-tree-sitter";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { inspectVueSource, setVueSourceInfo } from "./vue-source.ts";
 
 /**
  * Tree-sitter（WASM）加载器。
@@ -75,10 +76,18 @@ export function getParser(grammar: string): Promise<Parser> {
 /** 解析源码；调用方必须在使用完毕后调用 tree.delete() 释放 WASM 内存 */
 export async function parseSource(grammar: string, source: string): Promise<Parser.Tree | null> {
   const parser = await getParser(grammar);
+  let tree: Parser.Tree | null;
   try {
-    return parser.parse(source);
+    tree = parser.parse(source);
   } catch {
     parser.reset();
     return null;
   }
+  if (grammar !== "vue" || !tree) return tree;
+  let info;
+  try { info = inspectVueSource(tree.rootNode, source); }
+  finally { tree.delete(); }
+  const scriptTree = await parseSource(info.grammar, info.scriptSource);
+  if (scriptTree) setVueSourceInfo(scriptTree, info);
+  return scriptTree;
 }

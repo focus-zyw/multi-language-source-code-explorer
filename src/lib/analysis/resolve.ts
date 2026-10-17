@@ -108,7 +108,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   };
 
   const recs: SymRec[][] = files.map((f) => f.extract.symbols.map((sym) => ({ id: symbolIds[f.idx][sym.localId], fileIdx: f.idx, sym })));
-  const sameLanguage = (a: number, b: number) => files[a].language === files[b].language || ["javascript", "typescript"].includes(files[a].language) && ["javascript", "typescript"].includes(files[b].language);
+  const sameLanguage = (a: number, b: number) => files[a].language === files[b].language || ["javascript", "typescript", "vue"].includes(files[a].language) && ["javascript", "typescript", "vue"].includes(files[b].language);
   const sameGoPackage = (a: number, b: number) => files[a].language === "go" && files[b].language === "go" && dirOf(files[a].path) === dirOf(files[b].path) && !!files[a].extract.moduleName && files[a].extract.moduleName === files[b].extract.moduleName;
   const sameJavaPackage = (a: number, b: number) => files[a].language === "java" && files[b].language === "java" && files[a].extract.moduleName !== undefined && files[a].extract.moduleName === files[b].extract.moduleName;
   const infos: FileInfo[] = files.map((f) => {
@@ -125,7 +125,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     for (const r of recs[f.idx]) {
       const s = r.sym;
       if (s.kind === "test") continue;
-      if (s.parentLocalId === null && s.container === null) push(info.top, s.name, r);
+      if (s.container === null && (s.parentLocalId === null || f.language === "vue" && /^export\s/.test(s.signature))) push(info.top, s.name, r);
       if (s.container !== null && s.kind !== "class") {
         let m = info.byContainer.get(s.container);
         if (!m) info.byContainer.set(s.container, (m = new Map()));
@@ -595,6 +595,9 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
           if (overloads.length > 1) o = { resolution: "heuristic", reason: "存在多个同名重载；尚未进行 Java 参数类型与泛型推导，以下均为候选", targets: overloads.map((r) => target(r, "heuristic", r.sym.signature)) };
           else if (call.kind !== "new") o = { ...o, resolution: "inferred", targets: o.targets.map((t) => ({ ...t, confidence: "inferred", score: 0.75 })) };
         }
+      }
+      if (f.language === "vue" && call.origin && o.targets.length && ["exact", "inferred"].includes(o.resolution)) {
+        o = { ...o, resolution: "inferred", reason: `${call.origin === "vue-template" ? "Vue 模板静态绑定（不表示初始化执行顺序）" : "按 Vue Options API 的 this 上下文推断"}；${o.reason}`, targets: o.targets.map((t) => ({ ...t, confidence: "inferred", score: 0.75 })) };
       }
       refs.push({
         ownerSymbolId: symbolIds[f.idx][call.ownerLocalId],

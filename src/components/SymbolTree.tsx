@@ -30,7 +30,7 @@ function buildDirTree(files: TreeFile[]): DirNode {
   return root;
 }
 
-const LANG_DOT: Record<string, string> = { python: "bg-sky-400", javascript: "bg-yellow-300", typescript: "bg-blue-400", go: "bg-cyan-400", java: "bg-orange-400" };
+const LANG_DOT: Record<string, string> = { python: "bg-sky-400", javascript: "bg-yellow-300", typescript: "bg-blue-400", go: "bg-cyan-400", java: "bg-orange-400", vue: "bg-emerald-400" };
 
 type Filter = "all" | "source" | "tests";
 

@@ -7,6 +7,7 @@ import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution"
 import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
 import "monaco-editor/esm/vs/basic-languages/go/go.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
+import "monaco-editor/esm/vs/basic-languages/html/html.contribution";
 import { sliceLines, type CodeViewerProps, type ViewerRef } from "./viewer-types";
 
 // 只读源码浏览只需要基础的编辑器 worker；不加载 TS/JSON 等语言服务（无需执行或类型检查项目代码）
@@ -88,13 +89,14 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
     const offset = mode === "method" ? range.startLine - 1 : 0;
     offsetRef.current = offset;
     const text = mode === "method" ? sliceLines(content, range.startLine, range.endLine) : content;
+    const modelLanguage = language === "vue" ? mode === "method" && range.startLine > 1 ? "typescript" : "html" : language;
     let model = ed.getModel();
     if (!model) {
-      model = monaco.editor.createModel(text, language);
+      model = monaco.editor.createModel(text, modelLanguage);
       ed.setModel(model);
     } else {
       if (model.getValue() !== text) model.setValue(text);
-      monaco.editor.setModelLanguage(model, language);
+      monaco.editor.setModelLanguage(model, modelLanguage);
     }
     ed.updateOptions({ lineNumbers: (n: number) => String(n + offset) });
     ed.setScrollTop(0);

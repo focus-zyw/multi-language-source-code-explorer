@@ -324,7 +324,7 @@ export function ImportPanel() {
                   已跳过：{skippedEntries.map(([k, v]) => `${SKIP_REASON_LABELS[k]?.split("（")[0] ?? k} ${v}`).join("，")}
                 </p>
               )}
-              {picked.items.length === 0 && <p className="mt-1 text-xs text-rose-300">未发现 .py / .js / .ts 等受支持的源码文件。</p>}
+              {picked.items.length === 0 && <p className="mt-1 text-xs text-rose-300">未发现受支持的源码文件。</p>}
             </div>
           )}
           <input

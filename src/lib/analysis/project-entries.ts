@@ -41,7 +41,9 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
     let reason = "";
     let confidence: ProjectEntry["confidence"] = "inferred";
 
-    if (javaMethod && item.name === "main" && /\bstatic\s+void\s+main\s*\(/.test(item.signature)) {
+    if (/\.vue$/.test(path) && /^Vue component /.test(item.signature)) {
+      group = "pages"; reason = "Vue 单文件组件入口；包含脚本初始化与模板静态绑定，不表示具体挂载顺序";
+    } else if (javaMethod && item.name === "main" && /\bstatic\s+void\s+main\s*\(/.test(item.signature)) {
       group = "startup"; reason = "按 Java static void main 方法签名识别，未验证构建配置"; confidence = "heuristic";
     } else if (javaMethod && item.decorators.some((d) => /^@(?:[\w.]*\.)?(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\b/.test(d))) {
       group = "api"; reason = "按 Java 路由注解约定识别，未验证框架运行时注册";

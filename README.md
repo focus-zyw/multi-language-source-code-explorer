@@ -2,7 +2,7 @@
 
 独立的多语言源码学习 Web 应用：**导入源码项目（本地路径、文件夹或 ZIP）→ 浏览函数/方法 → 阅读源码与讲解 → 查看关联测试 → 点击引用跳转 → 单方法流程图、关键变量定义与引用**。
 
-当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java**；解析层是语言插件架构，可扩展其他语言。
+当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java / Vue 单文件组件**；解析层是语言插件架构，可扩展其他语言。
 所有跨文件关系都带**可信度标注**，猜测不会被伪装成事实；无法解析的项会明确列出。
 
 ## 快速启动
@@ -202,3 +202,10 @@ npx next typegen && npm exec tsc -- --noEmit && npm run build
 同包类型、源码目录导入、继承及方法调用标为推断；同类同名重载保留全部候选，不按方法名选择第一个。当前不执行 javac、不解析 Maven/Gradle 依赖，不做完整参数类型/泛型推导、虚方法动态分派、Lombok 生成代码或反射分析。无方法体的声明只保留所属类型，匿名类与 lambda 内部逻辑不展开，finally 路径沿用简化控制流。
 
 验证：node --test tests/java.test.ts；启动本地应用后运行 node --test tests/java.integration.test.mjs。
+## Vue 支持
+
+支持 .vue 单文件组件，分别解析模板与普通 script / script setup 的内联 JS、TS、JSX、TSX；屏蔽模板、样式和自定义块时保持 UTF-16 索引与换行，因此方法定位、引用和行号对应原文件。组件入口提供脚本初始化视图，复用函数、Options API 方法、流程图、变量与 AI 讲解。Vue 与 JS/TS 相互导入可定位默认组件或显式导出的函数。
+
+模板中的简单事件处理器、插值函数和显式导入的组件建立推断关系；这些边表示静态绑定，不代表挂载、渲染或点击顺序。跳过明显被 v-for / slot 局部别名遮蔽的同名处理器。动态组件、复杂指令表达式、模板局部类型、自动注册与编译宏不做运行时展开；样式不生成调用树。外置 script src 不会自动读取，不支持的脚本语言和重复脚本块会在导入报告中提示。Options API 的 this 按组件上下文推断，data / mixin / 插件注入的字段不做完整类型解析。
+
+验证：node --test tests/vue.test.ts；启动本地应用后运行 node --test tests/vue.integration.test.mjs。

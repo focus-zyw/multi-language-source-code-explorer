@@ -373,6 +373,7 @@ export async function getAnalysis(projectId: number, symbolId: number): Promise<
   const m = pluginForPath(file.path);
   const plugin = m?.plugin ?? pluginById(file.language);
   if (!m || !plugin) return { flow: null, variables: [], notes: ["该语言暂无分析插件。"] };
+  notes.push(...plugin.analysisNotes ?? []);
   const tree = await parseSource(m.grammar, file.content);
   if (!tree) return { flow: null, variables: [], notes: ["文件解析超时。"] };
   try {

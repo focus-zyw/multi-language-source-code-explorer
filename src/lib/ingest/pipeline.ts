@@ -133,6 +133,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
     }
     try {
       const extract = m.plugin.extract(tree.rootNode, d.content, d.path);
+      for (const warning of extract.warnings ?? []) warnings.push(`${d.path}: ${warning}`);
       symbolTotal += extract.symbols.length;
       units.push({ idx: units.length, path: d.path, language: m.plugin.id, plugin: m.plugin, extract, isTest: m.plugin.isTestFile(d.path) });
       contents.push(d);
