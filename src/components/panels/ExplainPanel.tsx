@@ -7,6 +7,7 @@ import type { AgentPhase, ExplanationBackend, ExplanationResult } from "@/lib/ai
 import { explanationTaskKey, explanationTasks } from "@/lib/explanation-tasks";
 import { Chip, KindIcon, kindLabel } from "../Badges";
 import { Markdown } from "../Markdown";
+import { ReadingZoom } from "../ReadingZoom";
 
 interface Props {
   projectId: number;
@@ -55,11 +56,12 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
   const unresolvedImports = file.imports.filter((i) => i.kind === "unresolved");
 
   return (
-    <div className="space-y-4 p-4">
+    <ReadingZoom region="explanation">
+    {(fontSize) => <div className="space-y-4 p-4" style={{ fontSize }}>
       <div>
         <div className="flex items-center gap-2">
           <KindIcon kind={s.kind} />
-          <h2 className="break-all text-base font-semibold text-white">{s.qualifiedName}</h2>
+          <h2 className="break-all text-[1.067em] font-semibold text-white">{s.qualifiedName}</h2>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Chip tone="indigo">{kindLabel(s.kind)}</Chip>
@@ -86,13 +88,13 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
 
       <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">静态摘要</h3>
+          <h3 className="text-[1em] font-semibold text-slate-200">静态摘要</h3>
           <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400" title="由语法分析与度量直接生成，不含模型推测">
             语法分析生成 · 非 AI
           </span>
         </div>
-        <p className="text-[13px] leading-6 text-slate-200">{summary.headline}</p>
-        <ul className="mt-2 space-y-1 text-[13px] leading-6 text-slate-400">
+        <p className="leading-[1.7] text-slate-200">{summary.headline}</p>
+        <ul className="mt-2 space-y-1 leading-[1.7] text-slate-400">
           {summary.bullets.map((b, i) => (
             <li key={i} className="flex gap-2">
               <span className="text-slate-600">•</span>
@@ -104,14 +106,14 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
 
       {s.docstring && (
         <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <h3 className="mb-1 text-sm font-semibold text-slate-200">源码中的文档注释</h3>
-          <pre className="whitespace-pre-wrap font-sans text-[13px] leading-6 text-slate-400">{s.docstring}</pre>
+          <h3 className="mb-1 text-[1em] font-semibold text-slate-200">源码中的文档注释</h3>
+          <pre className="whitespace-pre-wrap font-sans text-[1em] leading-[1.7] text-slate-400">{s.docstring}</pre>
         </section>
       )}
 
       <section className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4" aria-busy={loading}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-indigo-200">AI 讲解</h3>
+          <h3 className="text-[1em] font-semibold text-indigo-200">AI 讲解</h3>
           <div className="flex items-center gap-2">
             <label htmlFor="explain-backend" className="text-xs text-slate-300">讲解来源</label>
             <select id="explain-backend" value={backend} onChange={(event) => {
@@ -124,7 +126,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
             </select>
           </div>
         </div>
-        <p className="mb-3 text-[13px] leading-6 text-slate-400">
+        <p className="mb-3 leading-[1.7] text-slate-400">
           {backend === "agent"
             ? "通过本机 Codex 生成讲解，使用已有 CLI 登录。本次只提供当前方法源码和静态分析事实。"
             : `通过模型 API 生成讲解${selected.model ? `（${selected.model}）` : ""}，密钥仅在服务端读取。`}
@@ -137,8 +139,8 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
               由 {cached.model ?? "模型"} 生成{cached.generatedAt ? ` · ${new Date(cached.generatedAt).toLocaleString("zh-CN")}` : ""} · AI 内容可能有误，请对照源码阅读
             </p>
           </>
-        ) : <p className="text-[13px] leading-6 text-slate-400">此来源尚未生成讲解，生成后会单独缓存。</p>}
-        {!selected.available && <p className="mt-3 text-[13px] leading-6 text-amber-200">
+        ) : <p className="leading-[1.7] text-slate-400">此来源尚未生成讲解，生成后会单独缓存。</p>}
+        {!selected.available && <p className="mt-3 leading-[1.7] text-amber-200">
           {backend === "agent" ? "未检测到 Codex。请先安装并执行 codex login，再重启应用。" : "模型 API 未配置。请在服务端设置 AI_API_KEY 后重启，或切换到本机 Agent。"}
         </p>}
         {selected.available && <button onClick={() => generate(!!cached)} disabled={loading} className="mt-3 min-h-11 min-w-32 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-300">
@@ -202,6 +204,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
           </ul>
         )}
       </section>
-    </div>
+    </div>}
+    </ReadingZoom>
   );
 }

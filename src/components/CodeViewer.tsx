@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { Component, useState, type ReactNode } from "react";
 import PlainCode from "./PlainCode";
+import { ReadingZoom } from "./ReadingZoom";
 import type { CodeViewerProps } from "./viewer-types";
 
 const MonacoEditor = dynamic(() => import("./MonacoEditor"), {
@@ -27,10 +28,13 @@ class Boundary extends Component<{ fallback: ReactNode; onFail: () => void; chil
 /** Monaco（只读）为主；若其脚本/worker 加载失败则自动回退到简易查看器 */
 export function CodeViewer(props: CodeViewerProps) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <PlainCode {...props} />;
   return (
-    <Boundary fallback={<PlainCode {...props} />} onFail={() => setFailed(true)}>
-      <MonacoEditor {...props} />
-    </Boundary>
+    <ReadingZoom region="code" className="h-full min-h-0">
+      {(fontSize) => failed ? <PlainCode {...props} fontSize={fontSize} /> : (
+        <Boundary fallback={<PlainCode {...props} fontSize={fontSize} />} onFail={() => setFailed(true)}>
+          <MonacoEditor {...props} fontSize={fontSize} />
+        </Boundary>
+      )}
+    </ReadingZoom>
   );
 }

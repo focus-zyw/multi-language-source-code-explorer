@@ -15,7 +15,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
     const tok = m[0];
     if (tok.startsWith("`")) {
       out.push(
-        <code key={`${keyBase}-${i++}`} className="rounded bg-slate-800 px-1 py-0.5 font-mono text-[12px] text-amber-200">
+        <code key={`${keyBase}-${i++}`} className="rounded bg-slate-800 px-1 py-0.5 font-mono text-[0.9em] text-amber-200">
           {tok.slice(1, -1)}
         </code>,
       );
@@ -45,7 +45,7 @@ export function Markdown({ text }: { text: string }) {
       while (i < lines.length && !lines[i].trim().startsWith("```")) code.push(lines[i++]);
       i++;
       blocks.push(
-        <pre key={key++} className="my-2 overflow-x-auto rounded-md bg-slate-950 p-3 font-mono text-[12px] leading-5 text-slate-200">
+        <pre key={key++} className="my-2 overflow-x-auto rounded-md bg-slate-950 p-3 font-mono text-[0.9em] leading-[1.6] text-slate-200">
           {code.join("\n")}
         </pre>,
       );
@@ -54,7 +54,7 @@ export function Markdown({ text }: { text: string }) {
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     if (h) {
       blocks.push(
-        <h4 key={key++} className="mt-4 mb-1.5 text-sm font-semibold text-indigo-200">
+        <h4 key={key++} className="mt-4 mb-1.5 text-[1.067em] font-semibold text-indigo-200">
           {inline(h[2], `h${key}`)}
         </h4>,
       );
@@ -67,7 +67,7 @@ export function Markdown({ text }: { text: string }) {
       while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, ""));
       const Tag = ordered ? "ol" : "ul";
       blocks.push(
-        <Tag key={key++} className={`my-1.5 space-y-1 pl-5 text-[13px] leading-6 text-slate-300 ${ordered ? "list-decimal" : "list-disc"}`}>
+        <Tag key={key++} className={`my-1.5 space-y-1 pl-5 leading-[1.7] text-slate-300 ${ordered ? "list-decimal" : "list-disc"}`}>
           {items.map((it, j) => (
             <li key={j}>{inline(it, `li${key}-${j}`)}</li>
           ))}
@@ -82,7 +82,7 @@ export function Markdown({ text }: { text: string }) {
     const para: string[] = [];
     while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\s*([-*]|\d+\.)\s+|```)/.test(lines[i])) para.push(lines[i++]);
     blocks.push(
-      <p key={key++} className="my-1.5 text-[13px] leading-6 text-slate-300">
+      <p key={key++} className="my-1.5 leading-[1.7] text-slate-300">
         {inline(para.join(" "), `p${key}`)}
       </p>,
     );

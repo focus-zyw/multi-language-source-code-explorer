@@ -13,6 +13,7 @@ import { RescanButton } from "./RescanButton";
 import { SymbolTree } from "./SymbolTree";
 import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
+import { ReadingShortcutHint } from "./ReadingZoom";
 import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
@@ -430,6 +431,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
           </>
         )}
       </div>
+      <ReadingShortcutHint />
       {showReport && <ImportReport project={project} onClose={() => setShowReport(false)} />}
     </div>
   );

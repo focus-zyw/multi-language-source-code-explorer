@@ -30,14 +30,14 @@ const LABEL: Record<string, string> = {
   unresolved: "无法解析",
 };
 
-export default function MonacoEditor({ content, language, fileKey, range, mode, refs, highlight, onRefClick }: CodeViewerProps) {
+export default function MonacoEditor({ content, language, fileKey, range, mode, refs, highlight, onRefClick, fontSize = 14 }: CodeViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const decoRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
   const offsetRef = useRef(0);
   const refsRef = useRef<ViewerRef[]>([]);
   const clickRef = useRef(onRefClick);
-  clickRef.current = onRefClick;
+  useEffect(() => { clickRef.current = onRefClick; }, [onRefClick]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -50,8 +50,9 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
-      fontSize: 13,
-      lineHeight: 20,
+      fontSize: 14,
+      lineHeight: 22,
+      mouseWheelZoom: false,
       renderLineHighlight: "none",
       contextmenu: false,
       occurrencesHighlight: "off",
@@ -81,6 +82,10 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
       editorRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ fontSize, lineHeight: Math.round(fontSize * 1.6) });
+  }, [fontSize]);
 
   // 内容 / 模式切换
   useEffect(() => {

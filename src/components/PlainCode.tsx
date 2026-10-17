@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { sliceLines, type CodeViewerProps } from "./viewer-types";
 
 /** Monaco 无法加载时的备用只读查看器：同样支持行号、引用着色/点击与高亮 */
-export default function PlainCode({ content, fileKey, range, mode, refs, highlight, onRefClick }: CodeViewerProps) {
+export default function PlainCode({ content, fileKey, range, mode, refs, highlight, onRefClick, fontSize = 14 }: CodeViewerProps) {
   const offset = mode === "method" ? range.startLine - 1 : 0;
   const lines = useMemo(() => (mode === "method" ? sliceLines(content, range.startLine, range.endLine) : content).split("\n"), [content, mode, range.startLine, range.endLine]);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -36,7 +36,7 @@ export default function PlainCode({ content, fileKey, range, mode, refs, highlig
   }, [highlight]);
 
   return (
-    <div ref={hostRef} className="plain-code h-full overflow-auto bg-[#1e1e1e] py-2 font-mono text-[13px] leading-5 text-slate-200">
+    <div ref={hostRef} style={{ fontSize, lineHeight: `${Math.round(fontSize * 1.6)}px` }} className="plain-code h-full overflow-auto bg-[#1e1e1e] py-2 font-mono text-slate-200">
       {lines.map((text, i) => {
         const ln = i + 1 + offset;
         const inSym = mode === "file" && ln >= range.startLine && ln <= range.endLine;

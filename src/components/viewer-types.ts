@@ -18,6 +18,7 @@ export interface ViewerHighlight {
 }
 
 export interface CodeViewerProps {
+  fontSize?: number;
   content: string;
   language: string;
   /** 变化时重置滚动位置（文件或方法切换） */
