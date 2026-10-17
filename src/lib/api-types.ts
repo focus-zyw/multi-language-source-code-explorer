@@ -1,4 +1,4 @@
-import type { FileImportInfo, ProjectStats, SkippedInfo } from "./shared";
+import type { FileImportInfo, ProjectStats, SkippedInfo, ResolutionT } from "./shared";
 import type { FlowGraph, ParamInfo, SymbolMetrics, VariableInfo } from "./analysis/types";
 import type { StaticSummary } from "./analysis/summary";
 import type { AiPublicStatus, ExplanationBackend, ExplanationResult } from "./ai-types";
@@ -159,4 +159,46 @@ export interface AnalysisResult {
   flow: FlowGraph | null;
   variables: VariableInfo[];
   notes: string[];
+}
+
+export type CallTreeDirection = "outgoing" | "incoming";
+export interface CallTreeSymbol {
+  id: number;
+  name: string;
+  kind: string;
+  filePath: string;
+  line: number;
+}
+export interface CallTreeBranch {
+  refId: number;
+  label: string;
+  line: number;
+  filePath: string;
+  resolution: ResolutionT;
+  reason: string;
+  targets: { symbol: CallTreeSymbol; confidence: ResolutionT; reason: string }[];
+}
+export interface CallTreePage {
+  symbol: CallTreeSymbol;
+  direction: CallTreeDirection;
+  scope?: "all" | "project";
+  branches: CallTreeBranch[];
+  nextOffset: number | null;
+}
+
+export interface ProjectEntry {
+  symbol: CallTreeSymbol;
+  label: string;
+  reason: string;
+  confidence: "inferred" | "heuristic";
+}
+export interface ProjectEntryGroup {
+  id: "pages" | "api" | "startup" | "candidates";
+  label: string;
+  description: string;
+  entries: ProjectEntry[];
+}
+export interface ProjectEntries {
+  groups: ProjectEntryGroup[];
+  entryCount: number;
 }

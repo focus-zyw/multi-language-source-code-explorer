@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { AiError } from "./ai-error.ts";
+import type { AgentPhase } from "./ai-types.ts";
 
 export interface AgentConfig {
   command: string;
@@ -54,15 +55,18 @@ export function getAgentConfig(): AgentConfig | null {
 }
 
 export function agentArguments(cfg: AgentConfig): string[] {
-  return [...cfg.prefix, "exec", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral",
+  return [...cfg.prefix, "exec", "--json", "--ignore-user-config", "--skip-git-repo-check", "--ephemeral",
     "--sandbox", "read-only", "--color", "never", "-c", "approval_policy=\"never\"",
     "-c", "features.shell_tool=false", "-c", "project_doc_max_bytes=0", "-c", "model_reasoning_effort=\"low\"",
     ...(cfg.model ? ["--model", cfg.model] : []), "-"];
 }
 
 /** Prompt travels through stdin, never through a shell or command-line arguments. */
-export async function completeAgent(cfg: AgentConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
+export async function completeAgent(cfg: AgentConfig, system: string, user: string, signal?: AbortSignal, onProgress?: (phase: AgentPhase) => void): Promise<string> {
   if (signal?.aborted) throw new AiError("讲解已取消", 499);
+  let lastPhase: AgentPhase | undefined;
+  const progress = (phase: AgentPhase) => { if (phase !== lastPhase) { lastPhase = phase; onProgress?.(phase); } };
+  progress("starting");
   const cwd = await mkdtemp(join(tmpdir(), "code-atlas-agent-"));
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -73,6 +77,8 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
       }
       const child = spawn(cfg.command, agentArguments(cfg), { cwd, env, shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
       let output = "";
+      let pending = "";
+      let completed = false;
       let bytes = 0;
       let failure: AiError | null = null;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -93,10 +99,28 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
       signal?.addEventListener("abort", onAbort, { once: true });
       if (signal?.aborted) onAbort();
       child.stdout.setEncoding("utf8");
+      const eventLine = (line: string) => {
+        if (!line.trim() || failure) return;
+        let event: { type?: string; item?: { type?: string; phase?: string; text?: string } };
+        try { event = JSON.parse(line); }
+        catch { stop(new AiError("Agent 返回的事件格式无效，请确认 Codex CLI 支持 --json", 502)); return; }
+        if (!event || typeof event !== "object") { stop(new AiError("Agent 返回的事件格式无效", 502)); return; }
+        if (event.type === "turn.started") progress("running");
+        else if (event.type === "item.completed" && event.item?.type === "agent_message" && event.item.phase !== "commentary" && typeof event.item.text === "string") {
+          output = event.item.text;
+          progress("responding");
+        } else if (event.type === "turn.completed") { completed = true; progress("finishing"); }
+        else if (event.type === "turn.failed") stop(new AiError("Agent 模型请求失败，请检查登录、网络和模型配置", 502));
+        // Reasoning, tool payloads and raw errors never reach the UI or application logs.
+      };
       child.stdout.on("data", (chunk: string) => {
         bytes += Buffer.byteLength(chunk);
         if (bytes > 128_000) stop(new AiError("Agent 返回内容超过上限，请缩小讲解范围"));
-        else output += chunk;
+        else {
+          pending += chunk;
+          let newline: number;
+          while ((newline = pending.indexOf("\n")) >= 0) { eventLine(pending.slice(0, newline)); pending = pending.slice(newline + 1); }
+        }
       });
       // Drain progress logs without returning or persisting potentially sensitive diagnostics.
       child.stderr.resume();
@@ -109,10 +133,12 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
       };
       child.once("error", () => { cleanup(); reject(new AiError("无法启动 Codex，请检查 AI_AGENT_COMMAND 或本机安装", 503)); });
       child.once("close", (code) => {
+        if (!failure && pending.trim()) eventLine(pending);
         cleanup();
         if (failure) reject(failure);
         else if (code !== 0) reject(new AiError("Codex 运行失败，请在终端执行 codex login，并确认 CLI 已更新且可联网", 502));
         else if (!output.trim()) reject(new AiError("Agent 返回了空内容"));
+        else if (!completed) reject(new AiError("Agent 分析未完成，请重试", 502));
         else resolve(output.trim());
       });
     });

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SymbolDetail } from "@/lib/api-types";
-import type { ExplanationBackend, ExplanationResult } from "@/lib/ai-types";
+import type { AgentPhase, ExplanationBackend, ExplanationResult } from "@/lib/ai-types";
+import { explanationTaskKey, explanationTasks } from "@/lib/explanation-tasks";
 import { Chip, KindIcon, kindLabel } from "../Badges";
 import { Markdown } from "../Markdown";
 
@@ -14,6 +15,13 @@ interface Props {
   onAiUpdate: (symbolId: number, backend: ExplanationBackend, ai: ExplanationResult) => void;
 }
 
+const PHASE_LABEL: Record<AgentPhase, string> = {
+  starting: "正在启动本机 Agent",
+  running: "Agent 正在处理，等待讲解结果",
+  responding: "已收到讲解，正在完成生成",
+  finishing: "生成已完成，正在收尾并保存",
+};
+
 export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Props) {
   const { symbol: s, summary, ai, file } = detail;
   const router = useRouter();
@@ -22,39 +30,26 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
   const choice = searchParams.get("ai");
   const backend: ExplanationBackend = choice === "api" || choice === "agent" ? choice : ai.defaultBackend;
   const selected = ai.backends[backend];
-  const cached = ai.explanations[backend];
-  const [request, setRequest] = useState<{ id: number; backend: ExplanationBackend; loading: boolean; error: string | null } | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const currentRequest = request?.id === s.id && request.backend === backend ? request : null;
+  const tasks = useSyncExternalStore(explanationTasks.subscribe, explanationTasks.getSnapshot, explanationTasks.getServerSnapshot);
+  const taskKey = explanationTaskKey(projectId, s.id, backend);
+  const currentRequest = tasks.find((task) => task.key === taskKey);
+  const cached = currentRequest?.result ?? ai.explanations[backend];
+  const [now, setNow] = useState(0);
   const loading = currentRequest?.loading ?? false;
   const error = currentRequest?.error ?? null;
-  useEffect(() => () => { controllerRef.current?.abort(); controllerRef.current = null; }, [s.id, backend]);
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [loading]);
   const [showImports, setShowImports] = useState(false);
 
-  const generate = async (force: boolean) => {
-    if (controllerRef.current) return;
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setRequest({ id: s.id, backend, loading: true, error: null });
-    try {
-      const res = await fetch(`/api/projects/${projectId}/symbols/${s.id}/explain`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ force, backend }),
-        signal: controller.signal,
-      });
-      const json = (await res.json().catch(() => ({}))) as { explanation?: string; model?: string; generatedAt?: string; error?: string };
-      if (!res.ok || !json.explanation) throw new Error(json.error ?? `生成失败（HTTP ${res.status}）`);
-      if (!controller.signal.aborted) {
-        onAiUpdate(s.id, backend, { explanation: json.explanation, model: json.model ?? null, generatedAt: json.generatedAt ?? null });
-        setRequest({ id: s.id, backend, loading: false, error: null });
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) setRequest({ id: s.id, backend, loading: false, error: e instanceof Error ? e.message : "生成失败" });
-    } finally {
-      if (controllerRef.current === controller) controllerRef.current = null;
-    }
+  const generate = (force: boolean) => {
+    setNow(Date.now());
+    void explanationTasks.start({ projectId, symbolId: s.id, symbolName: s.qualifiedName, backend, force }, (result) => onAiUpdate(s.id, backend, result));
   };
+  const stop = () => explanationTasks.stop(taskKey);
+  const elapsedSeconds = currentRequest ? Math.max(0, Math.floor((now - currentRequest.startedAt) / 1000)) : 0;
 
   const m = s.metrics;
   const unresolvedImports = file.imports.filter((i) => i.kind === "unresolved");
@@ -137,6 +132,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
         {cached ? (
           <>
             <Markdown text={cached.explanation} />
+            {cached.relativeLines && <p className="mt-2 text-[11px] text-slate-500">讲解中的“方法内行号”以当前方法的第一行为第 1 行。</p>}
             <p className="mt-3 text-[11px] text-slate-500">
               由 {cached.model ?? "模型"} 生成{cached.generatedAt ? ` · ${new Date(cached.generatedAt).toLocaleString("zh-CN")}` : ""} · AI 内容可能有误，请对照源码阅读
             </p>
@@ -148,8 +144,13 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
         {selected.available && <button onClick={() => generate(!!cached)} disabled={loading} className="mt-3 min-h-11 min-w-32 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-300">
           {loading ? (backend === "agent" ? "Agent 正在分析…" : "正在生成…") : error ? "重试生成" : cached ? "重新生成" : "生成 AI 讲解"}
         </button>}
+        {loading && <button onClick={stop} className="ml-2 mt-3 min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">停止分析</button>}
         <div aria-live="polite">
-          {loading && <p className="mt-2 text-xs text-slate-400">{backend === "agent" ? "正在等待本机 Agent，可能需要几分钟。切换方法或来源将取消此次请求。" : "正在等待模型返回讲解…"}</p>}
+          {loading && <p className="mt-2 text-xs leading-5 text-slate-400">{backend === "agent" && currentRequest && currentRequest.phase !== "cancelled" ? PHASE_LABEL[currentRequest.phase] : "正在等待模型返回讲解"} · 已用时 {elapsedSeconds} 秒{currentRequest?.timeoutMs ? ` · 最长等待 ${Math.ceil(currentRequest.timeoutMs / 1000)} 秒` : ""}</p>}
+          {loading && <p className="mt-2 text-xs leading-5 text-slate-400">可继续切换方法、页签或讲解来源，生成会在后台继续；点击“停止分析”可取消。刷新或关闭页面会中断尚未完成的任务。</p>}
+          {loading && backend === "agent" && elapsedSeconds >= 30 && <p className="mt-2 text-xs leading-5 text-amber-200">耗时较长，模型速度和网络会影响等待时间。可继续浏览，完成后会自动保存。</p>}
+          {currentRequest?.phase === "cancelled" && <p className="mt-2 text-xs text-slate-400">已取消本次讲解，可随时重新生成。</p>}
+          {!loading && currentRequest?.durationMs !== undefined && <p className="mt-2 text-xs text-slate-500">本次生成耗时 {(currentRequest.durationMs / 1000).toFixed(1)} 秒</p>}
           {error && <p role="alert" className="mt-3 rounded bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
         </div>
       </section>

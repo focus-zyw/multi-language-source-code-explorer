@@ -29,7 +29,7 @@ export function ImportReport({ project, onClose }: { project: ProjectInfo; onClo
         {project.sourcePath && <div className="mt-4 rounded-lg bg-slate-950/60 p-3 text-xs leading-5 text-slate-400">
           <p className="break-all">本地来源：<span className="font-mono text-slate-200">{project.sourcePath}</span></p>
           {project.scannedAt && <p>最近扫描：{new Date(project.scannedAt).toLocaleString("zh-CN")}</p>}
-          <p>重新扫描会更新该项目的全部分析，并清除旧讲解缓存；不会修改源码。</p>
+          <p>重新扫描会更新项目分析，按内容指纹保留未变化的讲解；不会修改源码。</p>
         </div>}
         {project.warnings.length > 0 && (
           <div className="mt-4 rounded-lg bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">

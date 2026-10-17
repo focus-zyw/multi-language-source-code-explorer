@@ -1,10 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { symbolExplanations } from "@/db/schema";
 import { AiError, EXPLAIN_SYSTEM_PROMPT, buildExplainPrompt, completeChat, getAiConfig, getAiPublicStatus, explanationConfigKey } from "@/lib/ai";
 import { completeAgent, getAgentConfig } from "@/lib/agent";
-import type { ExplanationBackend } from "@/lib/ai-types";
+import type { AgentPhase, ExplanationBackend, ExplanationResponse } from "@/lib/ai-types";
+import { explanationStream } from "@/lib/explanation-stream";
 import { getSymbolForExplain, parseId } from "@/lib/queries";
+import { explanationContentKey, fingerprintExplanation, storedExplanationFingerprint } from "@/lib/explanation-fingerprint";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,16 +37,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return Response.json({ error: "请求需要 JSON 对象" }, { status: 400 });
   }
-  const body = parsed as { force?: unknown; backend?: unknown };
+  const body = parsed as { force?: unknown; backend?: unknown; stream?: unknown };
   const backend = body.backend ?? getAiPublicStatus().defaultBackend;
   if (backend !== "api" && backend !== "agent") return Response.json({ error: "讲解来源必须是 api 或 agent" }, { status: 400 });
   if (body.force !== undefined && typeof body.force !== "boolean") return Response.json({ error: "force 必须为布尔值" }, { status: 400 });
+  if (body.stream !== undefined && typeof body.stream !== "boolean") return Response.json({ error: "stream 必须为布尔值" }, { status: 400 });
   const data = await getSymbolForExplain(id, sid);
   if (!data) return Response.json({ error: "符号不存在" }, { status: 404 });
-  const { sym, file, calls } = data;
+  const { sym, file, calls, fingerprintCalls } = data;
 
-  const configKey = explanationConfigKey(backend);
-  const [cached] = await db.select().from(symbolExplanations).where(and(eq(symbolExplanations.symbolId, sid), eq(symbolExplanations.backend, backend), eq(symbolExplanations.configKey, configKey))).limit(1);
+  const configIdentity = explanationConfigKey(backend);
+  const fingerprint = fingerprintExplanation({ symbol: sym, filePath: file.path, language: file.language,
+    source: file.content.slice(sym.startIndex, sym.endIndex), calls: fingerprintCalls });
+  const configKey = explanationContentKey(configIdentity, fingerprint);
+  const [cached] = await db.select().from(symbolExplanations).where(and(eq(symbolExplanations.symbolId, sid), eq(symbolExplanations.backend, backend),
+    or(eq(symbolExplanations.configKey, configKey), eq(symbolExplanations.configKey, configIdentity)))).orderBy(desc(symbolExplanations.generatedAt)).limit(1);
   if (cached && body.force !== true) {
     return Response.json({
       explanation: cached.content,
@@ -52,6 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       backend,
       generatedAt: cached.generatedAt.toISOString(),
       cached: true,
+      relativeLines: storedExplanationFingerprint(cached.configKey) !== null,
     });
   }
   const apiConfig = backend === "api" ? getAiConfig() : null;
@@ -66,17 +74,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const m = sym.metrics;
   const facts = [
     `签名：${sym.signature}`,
-    `位置：${file.path} 第 ${sym.startLine}–${sym.endLine} 行`,
+    `位置：${file.path}，${sym.qualifiedName}；调用行号相对于当前方法，所给源码的第一行是第 1 行。讲解中如引用行号，请明确写“方法内第 N 行”。`,
     `圈复杂度 ${m.complexity}，分支 ${m.branches}，循环 ${m.loops}，异常处理 ${m.handlers}，return ${m.returns}，throw/raise ${m.throws}`,
     ...(sym.docstring ? [`文档注释：${sym.docstring.slice(0, 400)}`] : []),
   ];
   const callLines = calls.map((c) => {
     const label =
       c.resolution === "exact" ? "确定" : c.resolution === "inferred" ? "推断" : c.resolution === "heuristic" ? "猜测" : c.resolution === "external" ? "外部/内建" : "无法解析";
-    return `第 ${c.line} 行 ${c.calleeText} → ${c.target ?? "（无项目内目标）"} [${label}]`;
+    return `方法内第 ${c.line - sym.startLine + 1} 行 ${c.calleeText} → ${c.target ?? "（无项目内目标）"} [${label}]`;
   });
 
-  try {
+  const execute = async (signal: AbortSignal, onProgress?: (phase: AgentPhase) => void): Promise<ExplanationResponse> => {
+    const started = Date.now();
+    const phases: Partial<Record<AgentPhase, number>> = {};
+    let completed = false;
+    try {
     const prompt = buildExplainPrompt({
         language: file.language,
         filePath: file.path,
@@ -88,13 +100,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         calls: callLines,
       });
     const explanation = agentConfig
-      ? await completeAgent(agentConfig, EXPLAIN_SYSTEM_PROMPT, prompt, req.signal)
-      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt);
+      ? await completeAgent(agentConfig, EXPLAIN_SYSTEM_PROMPT, prompt, signal, (phase) => { phases[phase] = Date.now() - started; onProgress?.(phase); })
+      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt, signal);
+    if (signal.aborted) throw new AiError("讲解已取消", 499);
     const model = agentConfig ? `Codex · ${agentConfig.model ?? "默认模型"}` : apiConfig!.model;
     const now = new Date();
     await db.insert(symbolExplanations).values({ symbolId: sym.id, backend: backend as ExplanationBackend, configKey, content: explanation, model, generatedAt: now })
       .onConflictDoUpdate({ target: [symbolExplanations.symbolId, symbolExplanations.backend, symbolExplanations.configKey], set: { content: explanation, model, generatedAt: now } });
-    return Response.json({ explanation, model, backend, generatedAt: now.toISOString(), cached: false });
+    const durationMs = Date.now() - started;
+    completed = true;
+    return { explanation, model, backend: backend as ExplanationBackend, generatedAt: now.toISOString(), cached: false, durationMs, relativeLines: true };
+    } finally {
+      console.info("[explain] finished", { backend, symbolId: sid, outcome: signal.aborted ? "cancelled" : completed ? "completed" : "failed", durationMs: Date.now() - started, phases });
+    }
+  };
+
+  if (body.stream === true && agentConfig) return explanationStream(req.signal, agentConfig.timeoutMs, execute);
+  try {
+    return Response.json(await execute(req.signal));
   } catch (e) {
     if (e instanceof AiError) return Response.json({ error: e.message }, { status: e.status });
     console.error("[explain] failed", e);

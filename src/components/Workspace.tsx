@@ -4,13 +4,14 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnalysisResult, ProjectInfo, SymbolDetail, TreeData } from "@/lib/api-types";
+import type { AnalysisResult, CallTreeDirection, CallTreeSymbol, ProjectInfo, SymbolDetail, TreeData } from "@/lib/api-types";
 import { RESOLUTION_LABELS, type ResolutionT } from "@/lib/shared";
 import { CodeViewer } from "./CodeViewer";
 import { ConfidenceBadge, Chip, KindIcon, kindLabel } from "./Badges";
 import { ImportReport } from "./ImportReport";
 import { RescanButton } from "./RescanButton";
 import { SymbolTree } from "./SymbolTree";
+import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
@@ -21,6 +22,11 @@ import type { AiPublicStatus, ExplanationBackend, ExplanationResult } from "@/li
 const FlowPanel = dynamic(() => import("./panels/FlowPanel"), {
   ssr: false,
   loading: () => <div className="p-8 text-center text-sm text-slate-500">正在加载流程图组件…</div>,
+});
+
+const CallTreeExplorer = dynamic(() => import("./CallTreeExplorer"), {
+  ssr: false,
+  loading: () => <div className="p-8 text-center text-sm text-slate-500">正在加载流程探索…</div>,
 });
 
 type Tab = "explain" | "refs" | "tests" | "flow" | "vars";
@@ -38,6 +44,11 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const sp = useSearchParams();
   const sParam = sp.get("s");
   const selectedId = sParam && /^\d{1,9}$/.test(sParam) ? Number(sParam) : null;
+  const exploring = sp.get("view") === "explore";
+  const rootParam = sp.get("root");
+  const rootId = rootParam && /^\d{1,9}$/.test(rootParam) ? Number(rootParam) : null;
+  const projectOverview = exploring && (!rootParam || rootParam === "project");
+  const direction: CallTreeDirection = sp.get("direction") === "incoming" ? "incoming" : "outgoing";
 
   const [detail, setDetail] = useState<SymbolDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,7 +68,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
   // 加载符号详情
   useEffect(() => {
-    if (selectedId === null) return;
+    if (selectedId === null || projectOverview) return;
     const cached = cache.current.get(selectedId);
     if (cached) {
       setDetail(cached);
@@ -81,11 +92,11 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
-  }, [selectedId, project.id]);
+  }, [selectedId, project.id, projectOverview]);
 
   // 流程图 / 变量：切到对应页签时按需分析
   useEffect(() => {
-    if (selectedId === null || (tab !== "flow" && tab !== "vars")) return;
+    if (selectedId === null || projectOverview || (tab !== "flow" && tab !== "vars")) return;
     const cached = analysisCache.current.get(selectedId);
     if (cached) {
       setAnalysis({ id: selectedId, loading: false, error: null, data: cached });
@@ -106,7 +117,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         if (e instanceof Error && e.name !== "AbortError") setAnalysis({ id: selectedId, loading: false, error: e.message, data: null });
       });
     return () => ac.abort();
-  }, [tab, selectedId, project.id]);
+  }, [tab, selectedId, project.id, projectOverview]);
 
   const current = detail && detail.symbol.id === selectedId ? detail : null;
   const shown = current ?? detail;
@@ -115,10 +126,47 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const navigate = useCallback(
     (id: number, note?: { text: string; level: ResolutionT }) => {
       setNavNote(note ? { ...note, forId: id } : null);
-      router.push(`${pathname}?s=${id}`, { scroll: false });
+      const params = new URLSearchParams(sp.toString());
+      params.set("s", String(id));
+      if (exploring && rootId !== null) params.set("root", String(rootId));
+      router.push(`${pathname}?${params}`, { scroll: false });
     },
-    [router, pathname],
+    [router, pathname, sp, exploring, rootId],
   );
+
+  const changeView = useCallback((view: "source" | "explore", id = selectedId, restart = false, nextDirection = direction) => {
+    const params = new URLSearchParams(sp.toString());
+    if (id !== null) params.set("s", String(id));
+    if (view === "explore") {
+      params.set("view", "explore");
+      params.set("root", restart && id !== null ? String(id) : rootParam ?? "project");
+      params.set("direction", nextDirection);
+    } else params.delete("view");
+    setNavNote(null);
+    router.push(`${pathname}?${params}`, { scroll: false });
+  }, [selectedId, direction, sp, rootParam, router, pathname]);
+
+  const openProjectOverview = useCallback(() => {
+    const params = new URLSearchParams(sp.toString());
+    params.set("view", "explore");
+    params.set("root", "project");
+    params.delete("direction");
+    router.push(`${pathname}?${params}`, { scroll: false });
+  }, [sp, router, pathname]);
+
+  const selectFromTree = useCallback((id: number) => {
+    if (exploring) changeView("explore", id, true);
+    else navigate(id);
+  }, [exploring, changeView, navigate]);
+
+  const inspectCall = useCallback((ownerId: number, refId: number) => {
+    navigate(ownerId);
+    setTab("refs");
+    setFocusRef({ id: refId, forId: ownerId });
+  }, [navigate]);
+  const viewSource = useCallback((id: number) => changeView("source", id), [changeView]);
+  const restartTree = useCallback((id: number) => changeView("explore", id, true), [changeView]);
+  const changeDirection = useCallback((next: CallTreeDirection) => changeView("explore", selectedId, false, next), [changeView, selectedId]);
 
   const onHighlight = useCallback((h: ViewerHighlight | null) => setHighlight(h ? { ...h, forId: selectedId } : null), [selectedId]);
 
@@ -165,6 +213,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     [tree.symbols],
   );
   const fileById = useMemo(() => new Map(tree.files.map((f) => [f.id, f])), [tree.files]);
+  const explorationRoot: CallTreeSymbol | null = useMemo(() => {
+    const symbol = tree.symbols.find((item) => item.id === rootId);
+    return symbol ? { id: symbol.id, name: symbol.qualifiedName, kind: symbol.kind, filePath: fileById.get(symbol.fileId)?.path ?? "", line: symbol.startLine } : null;
+  }, [rootId, tree.symbols, fileById]);
 
   const hl = highlight && highlight.forId === selectedId ? highlight : null;
   const note = navNote && navNote.forId === selectedId ? navNote : null;
@@ -189,13 +241,17 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         </Link>
         <span className="text-slate-700">/</span>
         <h1 className="min-w-0 truncate text-sm font-semibold text-white">{project.name}</h1>
-        <div className="hidden gap-1.5 md:flex">
+        <div className="hidden gap-1.5 xl:flex">
           {Object.entries(project.languages).map(([l, n]) => (
             <Chip key={l}>
               {l === "python" ? "Python" : l === "javascript" ? "JS" : "TS"} {n}
             </Chip>
           ))}
           <Chip>{project.symbolCount} 符号</Chip>
+        </div>
+        <div className="ml-auto flex shrink-0 rounded-md bg-slate-900 p-0.5 text-xs" role="group" aria-label="工作区模式">
+          <button onClick={() => changeView("source")} aria-pressed={!exploring} className={`rounded px-3 py-1.5 ${!exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>源码阅读</button>
+          <button onClick={() => changeView("explore")} aria-pressed={exploring} className={`rounded px-3 py-1.5 ${exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>流程探索</button>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <span
@@ -213,12 +269,14 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
       <div className="flex min-h-0 flex-1">
         {showSidebar && (
-          <aside className="w-72 shrink-0 border-r border-slate-800 bg-slate-950/70">
-            <SymbolTree tree={tree} selectedId={selectedId} onSelect={(id) => navigate(id)} />
+          <aside className={`${exploring ? "w-52 xl:w-64" : "w-72"} shrink-0 border-r border-slate-800 bg-slate-950/70`}>
+            <SymbolTree tree={tree} selectedId={selectedId} onSelect={selectFromTree} />
           </aside>
         )}
 
-        {selectedId === null ? (
+        {projectOverview ? (
+          <ProjectOverview key={project.id} projectId={project.id} projectName={project.name} onExplore={restartTree} />
+        ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">
               <h2 className="text-xl font-semibold text-white">开始浏览 {project.name}</h2>
@@ -237,7 +295,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               <ul className="mt-2 space-y-1">
                 {quickPicks.map((s) => (
                   <li key={s.id}>
-                    <button onClick={() => navigate(s.id)} className="flex w-full items-center gap-2 rounded-lg bg-slate-900/60 px-3 py-2 text-left hover:bg-slate-800">
+                    <button onClick={() => selectFromTree(s.id)} className="flex w-full items-center gap-2 rounded-lg bg-slate-900/60 px-3 py-2 text-left hover:bg-slate-800">
                       <KindIcon kind={s.kind} />
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-100">{s.qualifiedName}</span>
                       <span className="truncate text-[11px] text-slate-500">{fileById.get(s.fileId)?.path}</span>
@@ -257,6 +315,12 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         ) : (
           <>
             <section className="flex min-w-0 flex-1 flex-col border-r border-slate-800">
+              {explorationRoot && <div className={exploring ? "min-h-0 flex-1" : "hidden"}>
+                <CallTreeExplorer key={`${project.id}:${rootId}:${direction}`} projectId={project.id} root={explorationRoot} selectedId={selectedId} direction={direction} active={exploring}
+                  onDirection={changeDirection} onSelect={navigate} onInspect={inspectCall} onViewSource={viewSource} onRestart={restartTree} onProjectOverview={openProjectOverview} />
+              </div>}
+              {exploring && !explorationRoot && <div className="p-8 text-sm text-slate-400">探索起点已失效，请从左侧重新选择方法。<button onClick={() => restartTree(selectedId)} className="ml-2 text-indigo-300">使用当前方法</button></div>}
+              <div className={exploring ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
               <div className="flex h-10 shrink-0 items-center gap-2 border-b border-slate-800 bg-slate-950/70 px-3">
                 <button onClick={() => router.back()} className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white" title="返回上一个浏览位置">
                   ← 返回
@@ -325,9 +389,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 <span className="border-b-2 border-dotted border-slate-500">外部</span>
                 <span className="underline decoration-rose-400 decoration-wavy">无法解析</span>
               </div>
+              </div>
             </section>
 
-            <section className={`flex shrink-0 flex-col bg-slate-950/40 ${wide ? "w-[58%]" : "w-[460px]"}`}>
+            <section className={`flex shrink-0 flex-col bg-slate-950/40 ${wide ? "w-[58%]" : exploring ? "w-80 2xl:w-[400px]" : "w-[460px]"}`}>
               <div className="flex h-10 shrink-0 items-center border-b border-slate-800 bg-slate-950/70">
                 <div className="flex min-w-0 flex-1 overflow-x-auto">
                   {tabs.map((t) => (

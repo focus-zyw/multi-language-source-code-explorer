@@ -23,7 +23,7 @@ export function RescanButton({ projectId, sourcePath, inWorkspace = false }: { p
         // Drop symbol/analysis caches and old symbol deep links together.
         window.location.assign(`/p/${projectId}`);
       } else {
-        setResult(`扫描完成：${body.fileCount} 个文件，${body.symbolCount} 个符号`);
+        setResult(`扫描完成：${body.fileCount} 个文件，${body.symbolCount} 个符号，保留 ${body.preservedExplanations ?? 0} 份讲解`);
         router.refresh();
       }
     } catch (error) {
@@ -34,7 +34,7 @@ export function RescanButton({ projectId, sourcePath, inWorkspace = false }: { p
     }
   }
   return <div className="relative shrink-0">
-    <button type="button" onClick={rescan} disabled={busy} aria-busy={busy} title={`重新读取 ${sourcePath}，更新分析数据与讲解缓存`}
+    <button type="button" onClick={rescan} disabled={busy} aria-busy={busy} title={`重新读取 ${sourcePath}，保留内容指纹未变化的讲解`}
       className="rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-200 hover:border-indigo-400 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-indigo-400 disabled:cursor-wait disabled:opacity-50">
       {busy ? "正在扫描…" : "重新扫描"}
     </button>

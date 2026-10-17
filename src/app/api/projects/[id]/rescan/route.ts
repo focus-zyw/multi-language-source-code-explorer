@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const collected = await collectLocalDirectory(project.sourcePath);
     const result = await ingestProject({ name: project.name, sourceType: "local", sourcePath: collected.sourcePath,
       replaceProjectId: id, files: collected.files, skipped: collected.skipped, warnings: collected.warnings });
-    return Response.json({ id: result.projectId, fileCount: result.fileCount, symbolCount: result.symbolCount, stats: result.stats });
+    return Response.json({ id: result.projectId, fileCount: result.fileCount, symbolCount: result.symbolCount, stats: result.stats, preservedExplanations: result.preservedExplanations });
   } catch (error) {
     if (error instanceof ImportError) return Response.json({ error: error.message }, { status: error.status });
     console.error("[rescan] failed", error instanceof Error ? error.message : "unknown");

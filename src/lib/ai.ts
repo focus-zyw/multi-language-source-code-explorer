@@ -54,8 +54,11 @@ export function explanationConfigKey(backend: ExplanationBackend): string {
   return createHash("sha256").update(JSON.stringify([backend, identity])).digest("hex");
 }
 
-export async function completeChat(cfg: AiConfig, system: string, user: string): Promise<string> {
+export async function completeChat(cfg: AiConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener("abort", cancel, { once: true });
   const timer = setTimeout(() => controller.abort(), 90_000);
   try {
     let res: Response;
@@ -99,12 +102,14 @@ export async function completeChat(cfg: AiConfig, system: string, user: string):
     if (!text.trim()) throw new AiError("模型返回了空内容");
     return text.trim();
   } catch (e) {
+    if (signal?.aborted) throw new AiError("讲解已取消", 499);
     if (e instanceof AiError) throw e;
     if (e instanceof Error && e.name === "AbortError") throw new AiError("模型请求超时", 504);
     console.error("[ai] request failed:", e instanceof Error ? e.message.split(cfg.apiKey).join("***") : "unknown");
     throw new AiError("无法连接模型服务，请检查网络与 AI_BASE_URL");
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", cancel);
   }
 }
 

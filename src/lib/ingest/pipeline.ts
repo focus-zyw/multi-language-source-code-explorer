@@ -8,6 +8,8 @@ import { linkTests } from "@/lib/analysis/tests-link";
 import type { ProjectStats, SkipRecord, SkippedInfo } from "@/lib/shared";
 import { ImportError, LIMITS } from "./rules";
 import type { RawFile } from "./zip";
+import { snapshotExplanations, matchExplanations } from "@/lib/rescan-explanations";
+import type { ExplanationFingerprintInput, FingerprintTarget } from "@/lib/explanation-fingerprint";
 
 export interface IngestArgs {
   name: string;
@@ -26,6 +28,7 @@ export interface IngestResult {
   fileCount: number;
   symbolCount: number;
   stats: ProjectStats;
+  preservedExplanations: number;
 }
 
 const tick = () => new Promise<void>((r) => setImmediate(r));
@@ -164,6 +167,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
 
     const resolved = resolveProject(units, symbolIds);
     const links = linkTests(units, symbolIds, resolved.refs);
+    const savedExplanations = args.replaceProjectId !== undefined ? await snapshotExplanations(tx, args.replaceProjectId) : null;
 
     const stats: ProjectStats = {
       symbols: { function: 0, method: 0, class: 0, test: 0 },
@@ -192,7 +196,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
     let projectId: number;
     if (args.replaceProjectId !== undefined) {
       projectId = args.replaceProjectId;
-      // Cascades remove symbols, references, test links and stale AI explanations.
+      // Snapshot reusable explanations before cascades replace symbol IDs.
       // All replacement writes share this transaction; any failure restores the old snapshot.
       await tx.delete(schema.files).where(eq(schema.files.projectId, projectId));
       await tx.update(schema.projects).set(projectValues).where(eq(schema.projects.id, projectId));
@@ -248,7 +252,29 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
         metrics: s.metrics,
       })),
     );
-    await insertChunked(symRows, Object.keys(getTableColumns(schema.symbols)).length, (chunk) => tx.insert(schema.symbols).values(chunk));
+    let reusable: ReturnType<typeof matchExplanations> = { rows: [], legacy: new Map() };
+    if (savedExplanations && (savedExplanations.entries.length || savedExplanations.legacy.length)) {
+      const fileIndex = new Map(fileIds.map((id, index) => [id, index]));
+      const targetById = new Map<number, Omit<FingerprintTarget, "confidence">>();
+      for (const symbol of symRows) targetById.set(symbol.id, { filePath: units[fileIndex.get(symbol.fileId)!].path, name: symbol.qualifiedName, kind: symbol.kind });
+      const callsByOwner = new Map<number, ExplanationFingerprintInput["calls"]>();
+      for (const ref of resolved.refs) {
+        const list = callsByOwner.get(ref.ownerSymbolId) ?? [];
+        list.push({ ...ref.call, resolution: ref.resolution, targets: ref.targets.flatMap((target) => {
+          const identity = targetById.get(target.symbolId); return identity ? [{ ...identity, confidence: target.confidence }] : [];
+        }) });
+        callsByOwner.set(ref.ownerSymbolId, list);
+      }
+      const inputs = new Map<number, ExplanationFingerprintInput>();
+      for (const symbol of symRows) {
+        const index = fileIndex.get(symbol.fileId)!;
+        inputs.set(symbol.id, { symbol, filePath: units[index].path, language: units[index].language, source: contents[index].content.slice(symbol.startIndex, symbol.endIndex), calls: callsByOwner.get(symbol.id) ?? [] });
+      }
+      reusable = matchExplanations(savedExplanations, inputs);
+    }
+    const restoredSymRows = symRows.map((symbol) => ({ ...symbol, ...reusable.legacy.get(symbol.id) }));
+    await insertChunked(restoredSymRows, Object.keys(getTableColumns(schema.symbols)).length, (chunk) => tx.insert(schema.symbols).values(chunk));
+    await insertChunked(reusable.rows, Object.keys(getTableColumns(schema.symbolExplanations)).length, (chunk) => tx.insert(schema.symbolExplanations).values(chunk));
 
     const refIds = await allocIds(tx, "refs", resolved.refs.length);
     const refRows = resolved.refs.map((r, i) => ({
@@ -289,7 +315,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
       ),
     );
 
-    return { projectId, fileCount: units.length, symbolCount: totalSymbols, stats };
+    return { projectId, fileCount: units.length, symbolCount: totalSymbols, stats, preservedExplanations: reusable.rows.length + reusable.legacy.size };
   });
 
   return result;

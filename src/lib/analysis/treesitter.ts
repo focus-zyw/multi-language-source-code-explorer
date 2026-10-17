@@ -1,4 +1,5 @@
-import Parser from "web-tree-sitter";
+import type Parser from "web-tree-sitter";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 /**
@@ -6,36 +7,67 @@ import path from "node:path";
  * 语法 wasm 来自 tree-sitter-wasms；所有解析均在本进程内以纯语法分析完成，不执行被分析项目的任何代码。
  */
 
-let initPromise: Promise<void> | null = null;
-const parsers = new Map<string, Promise<Parser>>();
+interface ParserRuntime {
+  Parser: typeof Parser;
+  initPromise: Promise<void> | null;
+  parsers: Map<string, Promise<Parser>>;
+}
+
+const globalForParser = globalThis as typeof globalThis & { __codeAtlasParserRuntime?: ParserRuntime };
+
+function getRuntime(): ParserRuntime {
+  if (globalForParser.__codeAtlasParserRuntime) return globalForParser.__codeAtlasParserRuntime;
+  const nodeRequire = createRequire(path.join(process.cwd(), "package.json"));
+  const entry = nodeRequire.resolve("web-tree-sitter");
+  let Constructor = nodeRequire("web-tree-sitter") as typeof Parser;
+  // 0.22's Emscripten initialization replaces module.exports with its WASM
+  // module. A later route bundle / HMR must receive the original constructor.
+  // Reload once to recover a process that was already affected before this fix.
+  if (typeof Constructor !== "function" || typeof Constructor.init !== "function") {
+    delete nodeRequire.cache[entry];
+    Constructor = nodeRequire("web-tree-sitter") as typeof Parser;
+  }
+  const runtime: ParserRuntime = { Parser: Constructor, initPromise: null, parsers: new Map() };
+  globalForParser.__codeAtlasParserRuntime = runtime;
+  try {
+    runtime.initPromise = Constructor.init({
+      locateFile: (name: string) => path.join(wasmRoot(), "web-tree-sitter", name),
+    }).catch((error: unknown) => {
+      if (globalForParser.__codeAtlasParserRuntime === runtime) {
+        delete globalForParser.__codeAtlasParserRuntime;
+        delete nodeRequire.cache[entry];
+      }
+      throw error;
+    });
+  } catch (error) {
+    delete globalForParser.__codeAtlasParserRuntime;
+    throw error;
+  } finally {
+    const cached = nodeRequire.cache[entry];
+    if (cached) cached.exports = Constructor;
+  }
+  return runtime;
+}
 
 function wasmRoot(): string {
   return process.env.TREE_SITTER_WASM_ROOT || path.join(process.cwd(), "node_modules");
 }
 
-function init(): Promise<void> {
-  if (!initPromise) {
-    initPromise = Parser.init({
-      locateFile: (name: string) => path.join(wasmRoot(), "web-tree-sitter", name),
-    });
-  }
-  return initPromise;
-}
-
 export function getParser(grammar: string): Promise<Parser> {
-  let p = parsers.get(grammar);
+  const runtime = getRuntime();
+  let p = runtime.parsers.get(grammar);
   if (!p) {
     p = (async () => {
-      await init();
-      const lang = await Parser.Language.load(path.join(wasmRoot(), "tree-sitter-wasms", "out", `tree-sitter-${grammar}.wasm`));
-      const parser = new Parser();
+      await runtime.initPromise;
+      const lang = await runtime.Parser.Language.load(path.join(wasmRoot(), "tree-sitter-wasms", "out", `tree-sitter-${grammar}.wasm`));
+      const parser = new runtime.Parser();
       parser.setLanguage(lang);
       // 防止病态输入长时间占用 CPU（微秒）
       parser.setTimeoutMicros(8_000_000);
       return parser;
     })();
-    p.catch(() => parsers.delete(grammar));
-    parsers.set(grammar, p);
+    p.catch(() => runtime.parsers.delete(grammar));
+    runtime.parsers.set(grammar, p);
   }
   return p;
 }

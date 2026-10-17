@@ -69,3 +69,28 @@ test("agent can be disabled without affecting API configuration", () => {
     else process.env.AI_AGENT_ENABLED = previous;
   }
 });
+
+test("agent returns only final text from fragmented JSONL and reports safe lifecycle phases", async () => {
+  const phases: string[] = [];
+  const result = await completeAgent(config("events-success"), "system", "source", undefined, (phase) => phases.push(phase));
+  assert.equal(result, "最终讲解");
+  assert.deepEqual(phases, ["starting", "running", "responding", "finishing"]);
+  assert.ok(agentArguments(config()).includes("--json"));
+});
+
+test("agent rejects failed and incomplete turns without disclosing diagnostics", async () => {
+  for (const mode of ["events-failed", "events-incomplete"]) {
+    await assert.rejects(completeAgent(config(mode), "system", "source"), (error: Error) => {
+      assert.ok(!error.message.includes("private"));
+      assert.match(error.message, /失败|未完成/);
+      return true;
+    });
+  }
+});
+
+test("agent can stop after reporting that its turn has started", async () => {
+  const controller = new AbortController();
+  await assert.rejects(completeAgent(config("events-wait"), "system", "source", controller.signal, (phase) => {
+    if (phase === "running") controller.abort();
+  }), /取消/);
+});

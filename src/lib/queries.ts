@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { files, projects, refTargets, refs, symbols, testLinks, symbolExplanations } from "@/db/schema";
 import { getAiPublicStatus, explanationConfigKey } from "@/lib/ai";
 import type { ExplanationBackend, ExplanationResult } from "@/lib/ai-types";
+import { explanationMatchesConfig, fingerprintExplanation, storedExplanationFingerprint, type FingerprintTarget } from "@/lib/explanation-fingerprint";
 import { buildStaticSummary } from "@/lib/analysis/summary";
 import { buildFlowGraph } from "@/lib/analysis/flow";
 import { pluginById, pluginForPath } from "@/lib/analysis/registry";
@@ -296,11 +297,17 @@ export async function getSymbolDetail(projectId: number, symbolId: number): Prom
   const ai = getAiPublicStatus();
   const explanations: Partial<Record<ExplanationBackend, ExplanationResult>> = {};
   const cachedRows = await db.select().from(symbolExplanations).where(eq(symbolExplanations.symbolId, sym.id)).orderBy(desc(symbolExplanations.generatedAt));
+  let currentFingerprint: string | undefined;
   for (const row of cachedRows) {
     if (row.backend !== "api" && row.backend !== "agent") continue;
     if (explanations[row.backend]) continue;
-    if (ai.backends[row.backend].available && row.configKey !== explanationConfigKey(row.backend)) continue;
-    explanations[row.backend] = { explanation: row.content, model: row.model, generatedAt: row.generatedAt.toISOString() };
+    if (ai.backends[row.backend].available && !explanationMatchesConfig(row.configKey, explanationConfigKey(row.backend))) continue;
+    const savedFingerprint = storedExplanationFingerprint(row.configKey);
+    if (savedFingerprint) {
+      currentFingerprint ??= fingerprintExplanation({ symbol: sym, filePath: file.path, language: file.language, source: file.content.slice(sym.startIndex, sym.endIndex), calls: outgoing });
+      if (savedFingerprint !== currentFingerprint) continue;
+    }
+    explanations[row.backend] = { explanation: row.content, model: row.model, generatedAt: row.generatedAt.toISOString(), relativeLines: savedFingerprint !== null };
   }
   // Preserve explanations generated before backend-specific caching was introduced.
   if (!cachedRows.length && sym.aiExplanation) {
@@ -393,20 +400,25 @@ export async function getSymbolForExplain(projectId: number, symbolId: number) {
   const [file] = await db.select().from(files).where(eq(files.id, sym.fileId)).limit(1);
   if (!file) return null;
   const outgoing = await db
-    .select({ id: refs.id, line: refs.line, calleeText: refs.calleeText, resolution: refs.resolution })
+    .select({ id: refs.id, kind: refs.kind, line: refs.line, col: refs.col, calleeText: refs.calleeText, resolution: refs.resolution })
     .from(refs)
     .where(eq(refs.ownerSymbolId, sym.id))
-    .orderBy(asc(refs.line))
-    .limit(60);
+    .orderBy(asc(refs.line), asc(refs.col), asc(refs.id));
   const names = new Map<number, string>();
+  const targets = new Map<number, FingerprintTarget[]>();
   if (outgoing.length) {
     const t = await db
-      .select({ refId: refTargets.refId, name: symbols.qualifiedName })
+      .select({ refId: refTargets.refId, name: symbols.qualifiedName, filePath: files.path, kind: symbols.kind, confidence: refTargets.confidence })
       .from(refTargets)
       .innerJoin(symbols, eq(refTargets.targetSymbolId, symbols.id))
-      .where(or(...outgoing.map((o) => eq(refTargets.refId, o.id))))
+      .innerJoin(files, eq(symbols.fileId, files.id))
+      .where(and(eq(refTargets.projectId, projectId), inArray(refTargets.refId, db.select({ id: refs.id }).from(refs).where(eq(refs.ownerSymbolId, sym.id)))))
       .orderBy(desc(refTargets.score));
-    for (const r of t) if (!names.has(r.refId)) names.set(r.refId, r.name);
+    for (const r of t) {
+      if (!names.has(r.refId)) names.set(r.refId, r.name);
+      const list = targets.get(r.refId) ?? []; list.push(r); targets.set(r.refId, list);
+    }
   }
-  return { sym, file, calls: outgoing.map((o) => ({ ...o, target: names.get(o.id) ?? null })) };
+  return { sym, file, calls: outgoing.slice(0, 60).map((o) => ({ ...o, target: names.get(o.id) ?? null })),
+    fingerprintCalls: outgoing.map((call) => ({ ...call, targets: targets.get(call.id) ?? [] })) };
 }
