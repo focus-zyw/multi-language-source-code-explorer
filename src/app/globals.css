@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #0b1020;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+/* Monaco：调用引用装饰（按解析可信度着色） */
+.ref {
+  cursor: pointer;
+  text-underline-offset: 3px;
+  border-radius: 2px;
+}
+.ref-exact {
+  text-decoration: underline solid #34d399;
+  background: rgba(52, 211, 153, 0.12);
+}
+.ref-inferred {
+  text-decoration: underline solid #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+}
+.ref-heuristic {
+  text-decoration: underline dashed #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+}
+.ref-external {
+  text-decoration: underline dotted #64748b;
+}
+.ref-unresolved {
+  text-decoration: underline wavy #fb7185;
+  background: rgba(251, 113, 133, 0.08);
+}
+.sym-bg {
+  background: rgba(99, 102, 241, 0.1);
+}
+.flow-hl {
+  background: rgba(250, 204, 21, 0.2);
+  border-left: 3px solid #facc15;
+}
+
+/* 备用（非 Monaco）代码查看器 */
+.plain-code .ref-exact,
+.plain-code .ref-inferred,
+.plain-code .ref-heuristic,
+.plain-code .ref-external,
+.plain-code .ref-unresolved {
+  cursor: pointer;
+}
+
+.react-flow__attribution {
+  display: none;
+}

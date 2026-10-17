@@ -1,0 +1,42 @@
+{
+  "name": "code-atlas",
+  "private": true,
+  "scripts": {
+    "db:push": "drizzle-kit push",
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
+    "@libsql/client": "^0.18.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@types/yauzl": "^3.4.0",
+    "@xyflow/react": "^12.12.0",
+    "dotenv": "17.3.1",
+    "drizzle-orm": "0.45.2",
+    "monaco-editor": "^0.52.2",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "server-only": "^0.0.1",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.22.6",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@next/env": "16.2.6",
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "22.19.15",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "postcss": "8.5.8",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3"
+  }
+}

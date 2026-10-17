@@ -1,0 +1,206 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { SymbolDetail } from "@/lib/api-types";
+import type { ExplanationBackend, ExplanationResult } from "@/lib/ai-types";
+import { Chip, KindIcon, kindLabel } from "../Badges";
+import { Markdown } from "../Markdown";
+
+interface Props {
+  projectId: number;
+  detail: SymbolDetail;
+  onNavigate: (id: number) => void;
+  onAiUpdate: (symbolId: number, backend: ExplanationBackend, ai: ExplanationResult) => void;
+}
+
+export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Props) {
+  const { symbol: s, summary, ai, file } = detail;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const choice = searchParams.get("ai");
+  const backend: ExplanationBackend = choice === "api" || choice === "agent" ? choice : ai.defaultBackend;
+  const selected = ai.backends[backend];
+  const cached = ai.explanations[backend];
+  const [request, setRequest] = useState<{ id: number; backend: ExplanationBackend; loading: boolean; error: string | null } | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const currentRequest = request?.id === s.id && request.backend === backend ? request : null;
+  const loading = currentRequest?.loading ?? false;
+  const error = currentRequest?.error ?? null;
+  useEffect(() => () => { controllerRef.current?.abort(); controllerRef.current = null; }, [s.id, backend]);
+  const [showImports, setShowImports] = useState(false);
+
+  const generate = async (force: boolean) => {
+    if (controllerRef.current) return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setRequest({ id: s.id, backend, loading: true, error: null });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/symbols/${s.id}/explain`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ force, backend }),
+        signal: controller.signal,
+      });
+      const json = (await res.json().catch(() => ({}))) as { explanation?: string; model?: string; generatedAt?: string; error?: string };
+      if (!res.ok || !json.explanation) throw new Error(json.error ?? `生成失败（HTTP ${res.status}）`);
+      if (!controller.signal.aborted) {
+        onAiUpdate(s.id, backend, { explanation: json.explanation, model: json.model ?? null, generatedAt: json.generatedAt ?? null });
+        setRequest({ id: s.id, backend, loading: false, error: null });
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) setRequest({ id: s.id, backend, loading: false, error: e instanceof Error ? e.message : "生成失败" });
+    } finally {
+      if (controllerRef.current === controller) controllerRef.current = null;
+    }
+  };
+
+  const m = s.metrics;
+  const unresolvedImports = file.imports.filter((i) => i.kind === "unresolved");
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <KindIcon kind={s.kind} />
+          <h2 className="break-all text-base font-semibold text-white">{s.qualifiedName}</h2>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Chip tone="indigo">{kindLabel(s.kind)}</Chip>
+          {s.isAsync && <Chip tone="amber">async</Chip>}
+          {s.isGenerator && <Chip tone="amber">生成器</Chip>}
+          {s.decorators.map((d) => (
+            <Chip key={d} title="装饰器/注解">
+              {d}
+            </Chip>
+          ))}
+          <Chip title="行数">{m.loc} 行</Chip>
+          {s.kind !== "class" && (
+            <Chip tone={m.complexity > 10 ? "rose" : m.complexity > 5 ? "amber" : "emerald"} title="圈复杂度 = 1 + 分支 + 循环 + 异常处理 + 布尔运算">
+              复杂度 {m.complexity}
+            </Chip>
+          )}
+        </div>
+        {detail.parent && (
+          <button onClick={() => onNavigate(detail.parent!.id)} className="mt-2 text-xs text-indigo-300 hover:underline">
+            ↑ 所属：{detail.parent.name}
+          </button>
+        )}
+      </div>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-200">静态摘要</h3>
+          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400" title="由语法分析与度量直接生成，不含模型推测">
+            语法分析生成 · 非 AI
+          </span>
+        </div>
+        <p className="text-[13px] leading-6 text-slate-200">{summary.headline}</p>
+        <ul className="mt-2 space-y-1 text-[13px] leading-6 text-slate-400">
+          {summary.bullets.map((b, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-slate-600">•</span>
+              <span className="min-w-0 break-words">{b}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {s.docstring && (
+        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+          <h3 className="mb-1 text-sm font-semibold text-slate-200">源码中的文档注释</h3>
+          <pre className="whitespace-pre-wrap font-sans text-[13px] leading-6 text-slate-400">{s.docstring}</pre>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4" aria-busy={loading}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-indigo-200">AI 讲解</h3>
+          <div className="flex items-center gap-2">
+            <label htmlFor="explain-backend" className="text-xs text-slate-300">讲解来源</label>
+            <select id="explain-backend" value={backend} onChange={(event) => {
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("ai", event.target.value);
+              router.replace(`${pathname}?${params}`, { scroll: false });
+            }} className="min-h-11 max-w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-sm text-slate-200 focus-visible:outline-2 focus-visible:outline-indigo-400">
+              <option value="api">模型 API{!ai.backends.api.available ? "（未配置）" : ""}</option>
+              <option value="agent">本机 Agent · Codex{!ai.backends.agent.available ? "（未检测到）" : ""}</option>
+            </select>
+          </div>
+        </div>
+        <p className="mb-3 text-[13px] leading-6 text-slate-400">
+          {backend === "agent"
+            ? "通过本机 Codex 生成讲解，使用已有 CLI 登录。本次只提供当前方法源码和静态分析事实。"
+            : `通过模型 API 生成讲解${selected.model ? `（${selected.model}）` : ""}，密钥仅在服务端读取。`}
+        </p>
+        {cached ? (
+          <>
+            <Markdown text={cached.explanation} />
+            <p className="mt-3 text-[11px] text-slate-500">
+              由 {cached.model ?? "模型"} 生成{cached.generatedAt ? ` · ${new Date(cached.generatedAt).toLocaleString("zh-CN")}` : ""} · AI 内容可能有误，请对照源码阅读
+            </p>
+          </>
+        ) : <p className="text-[13px] leading-6 text-slate-400">此来源尚未生成讲解，生成后会单独缓存。</p>}
+        {!selected.available && <p className="mt-3 text-[13px] leading-6 text-amber-200">
+          {backend === "agent" ? "未检测到 Codex。请先安装并执行 codex login，再重启应用。" : "模型 API 未配置。请在服务端设置 AI_API_KEY 后重启，或切换到本机 Agent。"}
+        </p>}
+        {selected.available && <button onClick={() => generate(!!cached)} disabled={loading} className="mt-3 min-h-11 min-w-32 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-300">
+          {loading ? (backend === "agent" ? "Agent 正在分析…" : "正在生成…") : error ? "重试生成" : cached ? "重新生成" : "生成 AI 讲解"}
+        </button>}
+        <div aria-live="polite">
+          {loading && <p className="mt-2 text-xs text-slate-400">{backend === "agent" ? "正在等待本机 Agent，可能需要几分钟。切换方法或来源将取消此次请求。" : "正在等待模型返回讲解…"}</p>}
+          {error && <p role="alert" className="mt-3 rounded bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
+        </div>
+      </section>
+
+      {s.kind === "class" && detail.children.length > 0 && (
+        <section>
+          <h3 className="mb-1.5 text-sm font-semibold text-slate-200">成员（{detail.children.length}）</h3>
+          <ul className="space-y-0.5">
+            {detail.children.map((c) => (
+              <li key={c.id}>
+                <button onClick={() => onNavigate(c.id)} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[13px] text-slate-300 hover:bg-slate-800">
+                  <KindIcon kind={c.kind} />
+                  <span className="truncate">{c.name}</span>
+                  <span className="ml-auto text-[10px] text-slate-600">L{c.startLine}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section>
+        <button onClick={() => setShowImports((v) => !v)} className="flex w-full items-center justify-between text-left text-sm font-semibold text-slate-200">
+          <span>
+            本文件的导入（{file.imports.length}
+            {unresolvedImports.length ? `，其中 ${unresolvedImports.length} 项无法解析` : ""}）
+          </span>
+          <span className="text-xs text-slate-500">{showImports ? "收起" : "展开"}</span>
+        </button>
+        {showImports && (
+          <ul className="mt-2 space-y-1.5">
+            {file.imports.length === 0 && <li className="text-xs text-slate-500">无导入</li>}
+            {file.imports.map((i, idx) => (
+              <li key={idx} className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-slate-300">{i.specifier}</span>
+                  <span className="text-slate-500">L{i.line}</span>
+                  {i.kind === "project" && <Chip tone={i.guess ? "indigo" : "emerald"}>{i.guess ? "项目内·推断" : "项目内"}</Chip>}
+                  {i.kind === "external" && <Chip>外部/标准库</Chip>}
+                  {i.kind === "unresolved" && <Chip tone="rose">无法解析</Chip>}
+                </div>
+                <div className="mt-1 break-all text-slate-500">
+                  {i.names.join(", ")}
+                  {i.resolvedPath ? ` → ${i.resolvedPath}` : ""}
+                </div>
+                {i.reason && <div className="mt-1 text-rose-300/80">{i.reason}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}

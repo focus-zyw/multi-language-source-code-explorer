@@ -1,0 +1,71 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { agentArguments, completeAgent, getAgentConfig, type AgentConfig } from "../src/lib/agent.ts";
+
+const fixture = fileURLToPath(new URL("./support/agent-runner.mjs", import.meta.url));
+function config(model = "success"): AgentConfig {
+  return { command: process.execPath, prefix: [fixture], model, timeoutMs: 10_000 };
+}
+
+test("agent uses stdin, disables shell tools, filters credentials and cleans its workspace", async () => {
+  const previous = process.env.AI_API_KEY;
+  process.env.AI_API_KEY = "test-only-value";
+  try {
+    const text = "source with backticks ` and $(shell text) and quotes \"";
+    const result = JSON.parse(await completeAgent(config(), "system", text));
+    assert.ok(result.prompt.includes(text));
+    assert.ok(!result.args.includes(text));
+    assert.ok(result.args.includes("read-only"));
+    assert.ok(result.args.includes("--ignore-user-config"));
+    assert.ok(result.args.includes("features.shell_tool=false"));
+    assert.equal(result.leakedKey, false);
+    assert.equal(existsSync(result.cwd), false);
+  } finally {
+    if (previous === undefined) delete process.env.AI_API_KEY;
+    else process.env.AI_API_KEY = previous;
+  }
+});
+
+test("agent failures do not expose process diagnostics", async () => {
+  await assert.rejects(completeAgent(config("fail"), "system", "source"), (error: Error) => {
+    assert.match(error.message, /Codex 运行失败/);
+    assert.ok(!error.message.includes("private diagnostic"));
+    return true;
+  });
+});
+
+test("agent rejects empty and oversized output", async () => {
+  await assert.rejects(completeAgent(config("empty"), "system", "source"), /空内容/);
+  await assert.rejects(completeAgent(config("large"), "system", "source"), /超过上限/);
+});
+
+test("agent timeout stops the process", async () => {
+  await assert.rejects(completeAgent({ ...config("timeout"), timeoutMs: 250 }, "system", "source"), /超时/);
+});
+
+test("agent cancellation works before and during execution", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(completeAgent(config(), "system", "source", controller.signal), /取消/);
+  const active = new AbortController();
+  const result = completeAgent(config("timeout"), "system", "source", active.signal);
+  setTimeout(() => active.abort(), 150);
+  await assert.rejects(result, /取消/);
+});
+
+test("agent model is passed as one argument", () => {
+  const args = agentArguments(config("model with spaces"));
+  assert.equal(args[args.indexOf("--model") + 1], "model with spaces");
+});
+
+test("agent can be disabled without affecting API configuration", () => {
+  const previous = process.env.AI_AGENT_ENABLED;
+  process.env.AI_AGENT_ENABLED = "false";
+  try { assert.equal(getAgentConfig(), null); }
+  finally {
+    if (previous === undefined) delete process.env.AI_AGENT_ENABLED;
+    else process.env.AI_AGENT_ENABLED = previous;
+  }
+});
