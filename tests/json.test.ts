@@ -10,6 +10,18 @@ async function extract(source: string, path = "package.json") {
   try { return entry.plugin.extract(tree.rootNode, source, path); } finally { tree.delete(); }
 }
 
+test("dependency lock files retain a selectable document instead of thousands of indexed values", async () => {
+  const source = JSON.stringify({ lockfileVersion: 3, packages: Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`node_modules/pkg${i}`, { version: "1.0", integrity: "fixture" }])) });
+  for (const path of ["package-lock.json", "nested/npm-shrinkwrap.json"]) {
+    const result = await extract(source, path);
+    assert.equal(result.symbols.length, 1);
+    assert.equal(result.symbols[0].endIndex, source.length);
+    assert.ok(result.symbols[0].docstring?.includes("锁文件"));
+    assert.ok(result.warnings?.some((s) => s.includes("锁文件")));
+  }
+  assert.ok((await extract(source, "data.json")).symbols.length > 1000);
+});
+
 test("JSON retains object/array hierarchy, precise ranges, types and escaped keys", async () => {
   const source = '{\n "scripts": {"dev": "next dev"},\n "数组😀": [true, null, {"a\\\"b": 9007199254740993}]\n}';
   const result = await extract(source);

@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { TreeData, TreeFile, TreeSymbol } from "@/lib/api-types";
 import { KindIcon } from "./Badges";
+import { STRUCTURE_PAGE_SIZE, structurePageSize, structurePageItems } from "@/lib/structure-browsing";
 
 interface DirNode {
   name: string;
@@ -70,6 +71,14 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
     return s;
   });
   const [closedNodes, setClosedNodes] = useState<Set<number>>(() => new Set());
+  const [childLimits, setChildLimits] = useState<Map<number, number>>(() => new Map());
+  // Include selected ancestors so paging never hides a search result.
+  const selectionPath = useMemo(() => {
+    const path = new Set<number>();
+    let id = selectedId;
+    while (id !== null && !path.has(id)) { path.add(id); id = symById.get(id)?.parentId ?? null; }
+    return path;
+  }, [selectedId, symById]);
   const [openFiles, setOpenFiles] = useState<Set<number>>(() => new Set(tree.files.length <= 12 ? tree.files.map((f) => f.id) : []));
 
   // 选中符号时展开其所在目录/文件并滚动到可见
@@ -134,7 +143,10 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
   const renderSym = (s: TreeSymbol, depth: number): ReactNode => {
     const kids = childrenOf.get(s.id) ?? [];
     const structural = (s.kind === "element" || s.kind === "property");
-    const collapsed = closedNodes.has(s.id) || (depth > 3 && !closedNodes.has(-s.id));
+    const collapsed = closedNodes.has(s.id) || ((s.kind === "property" || depth > 3) && !closedNodes.has(-s.id));
+    const selectedChild = kids.find((kid) => selectionPath.has(kid.id));
+    const visibleCount = structural ? structurePageSize(kids, childLimits.get(s.id)) : kids.length;
+    const visibleKids = structural ? structurePageItems(kids, visibleCount, selectedChild?.id) : kids;
     return (
       <Fragment key={s.id}>
         <div className="flex items-center" style={{ paddingLeft: 8 + depth * 14 }}>
@@ -150,7 +162,10 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
           <span className="shrink-0 text-[10px] text-slate-600">{s.startLine}</span>
         </button>
         </div>
-        {(!structural || !collapsed) && kids.map((k) => renderSym(k, depth + 1))}
+        {(!structural || !collapsed) && <>
+          {visibleKids.map((k) => renderSym(k, depth + 1))}
+          {visibleCount < kids.length && <button onClick={() => setChildLimits((previous) => new Map(previous).set(s.id, visibleCount + STRUCTURE_PAGE_SIZE))} style={{ marginLeft: 8 + (depth + 1) * 14 }} className="rounded px-2 py-1 text-xs text-indigo-300 hover:bg-slate-800">再显示 {Math.min(STRUCTURE_PAGE_SIZE, kids.length - visibleCount)} 项（剩余 {kids.length - visibleCount} 项）</button>}
+        </>}
       </Fragment>
     );
   };

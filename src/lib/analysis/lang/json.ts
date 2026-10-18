@@ -1,6 +1,7 @@
 import type { ExtractResult, LanguagePlugin, SyntaxNode } from "../types.ts";
 import { structureDefaults, structureSymbol } from "../structure.ts";
 import { oneLine } from "../util.ts";
+import { isJsonDependencyLock } from "../../structure-browsing.ts";
 
 const PACKAGE_FIELDS: Record<string, string> = {
   name: "包名称", version: "包版本", private: "包发布限制标记", scripts: "命名脚本命令；这里只展示命令文本，不执行", dependencies: "运行依赖声明", devDependencies: "开发依赖声明", peerDependencies: "宿主应提供的依赖约束", optionalDependencies: "可选依赖声明", engines: "运行环境版本约束", exports: "包导出入口声明", main: "包入口声明", type: "JavaScript 模块类型声明", workspaces: "工作区包路径声明",
@@ -20,6 +21,12 @@ function extract(root: SyntaxNode, source: string, filePath: string): ExtractRes
   let invalid = root.hasError;
   try { JSON.parse(source); } catch { invalid = true; }
   const warnings: string[] = invalid ? ["JSON 不符合严格语法；结构可能不完整（暂不支持 JSONC 注释或尾逗号）。"] : [];
+  if (isJsonDependencyLock(filePath)) {
+    const note = "依赖锁文件记录自动生成的依赖版本与完整性信息，保留整体源码和讲解，不逐项建立配置节点。";
+    const document = structureSymbol(root, 0, null, "依赖锁文件", "$", "JSON dependency lock document", note);
+    document.kind = "property";
+    return { symbols: [document], calls: [], imports: [], hints: [], defaultExportName: null, hasSyntaxErrors: invalid, warnings: [...warnings, note] };
+  }
   const symbols: ExtractResult["symbols"] = [];
   const stack: { node: SyntaxNode; range: SyntaxNode; parent: number | null; path: (string | number)[]; name: string; depth: number; suffix?: string }[] = [];
   const value = root.namedChildren.find((n) => n.type !== "comment");

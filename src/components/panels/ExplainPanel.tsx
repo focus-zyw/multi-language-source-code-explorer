@@ -8,6 +8,7 @@ import { explanationTaskKey, explanationTasks } from "@/lib/explanation-tasks";
 import { Chip, KindIcon, kindLabel } from "../Badges";
 import { Markdown } from "../Markdown";
 import { ReadingZoom } from "../ReadingZoom";
+import { STRUCTURE_PAGE_SIZE } from "@/lib/structure-browsing";
 
 interface Props {
   projectId: number;
@@ -44,6 +45,8 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
     return () => clearInterval(interval);
   }, [loading]);
   const [showImports, setShowImports] = useState(false);
+  const [childrenPage, setChildrenPage] = useState({ id: s.id, limit: STRUCTURE_PAGE_SIZE });
+  const childrenLimit = childrenPage.id === s.id ? childrenPage.limit : STRUCTURE_PAGE_SIZE;
 
   const generate = (force: boolean) => {
     setNow(Date.now());
@@ -162,7 +165,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
         <section>
           <h3 className="mb-1.5 text-sm font-semibold text-slate-200">{structural ? "子节点" : "成员"}（{detail.children.length}）</h3>
           <ul className="space-y-0.5">
-            {detail.children.map((c) => (
+            {(structural ? detail.children.slice(0, childrenLimit) : detail.children).map((c) => (
               <li key={c.id}>
                 <button onClick={() => onNavigate(c.id)} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[13px] text-slate-300 hover:bg-slate-800">
                   <KindIcon kind={c.kind} />
@@ -172,6 +175,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
               </li>
             ))}
           </ul>
+          {structural && childrenLimit < detail.children.length && <button onClick={() => setChildrenPage({ id: s.id, limit: childrenLimit + STRUCTURE_PAGE_SIZE })} className="mt-2 rounded px-2 py-1 text-xs text-indigo-300 hover:bg-slate-800">再显示 {Math.min(STRUCTURE_PAGE_SIZE, detail.children.length - childrenLimit)} 项（剩余 {detail.children.length - childrenLimit} 项）</button>}
         </section>
       )}
 
