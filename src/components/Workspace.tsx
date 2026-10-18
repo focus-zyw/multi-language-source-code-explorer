@@ -10,6 +10,7 @@ import { CodeViewer } from "./CodeViewer";
 import { ConfidenceBadge, Chip, KindIcon, kindLabel } from "./Badges";
 import { ImportReport } from "./ImportReport";
 import { RescanButton } from "./RescanButton";
+import { ResizablePanels } from "./ResizablePanels";
 import { SymbolTree } from "./SymbolTree";
 import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
@@ -59,7 +60,6 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
   const [tab, setTab] = useState<Tab>("explain");
   const [mode, setMode] = useState<"method" | "file">("method");
-  const [wide, setWide] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [highlight, setHighlight] = useState<Scoped<ViewerHighlight> | null>(null);
@@ -317,8 +317,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
             </div>
           </main>
         ) : (
-          <>
-            <section className="flex min-w-0 flex-1 flex-col border-r border-slate-800">
+          <ResizablePanels>
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800">
               {explorationRoot && <div className={exploring ? "min-h-0 flex-1" : "hidden"}>
                 <CallTreeExplorer key={`${project.id}:${rootId}:${direction}`} projectId={project.id} root={explorationRoot} selectedId={selectedId} direction={direction} active={exploring}
                   onDirection={changeDirection} onSelect={navigate} onInspect={inspectCall} onViewSource={viewSource} onRestart={restartTree} onProjectOverview={openProjectOverview} />
@@ -398,7 +398,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               </div>
             </section>
 
-            <section className={`flex shrink-0 flex-col bg-slate-950/40 ${wide ? "w-[58%]" : exploring ? "w-80 2xl:w-[400px]" : "w-[460px]"}`}>
+            <section className="flex min-h-0 min-w-0 flex-col bg-slate-950/40">
               <div className="flex h-10 shrink-0 items-center border-b border-slate-800 bg-slate-950/70">
                 <div className="flex min-w-0 flex-1 overflow-x-auto">
                   {tabs.map((t) => (
@@ -412,9 +412,6 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setWide((w) => !w)} className="mx-2 shrink-0 rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800" title="放大/缩小右侧面板">
-                  {wide ? "⇥ 收窄" : "⇤ 放宽"}
-                </button>
               </div>
               <div className={`min-h-0 flex-1 ${!structural && tab === "flow" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
                 {!shown ? (
@@ -432,7 +429,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 )}
               </div>
             </section>
-          </>
+          </ResizablePanels>
         )}
       </div>
       <ReadingShortcutHint />
