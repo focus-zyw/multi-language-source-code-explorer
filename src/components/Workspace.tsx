@@ -12,6 +12,7 @@ import { ConfidenceBadge, Chip, KindIcon, kindLabel } from "./Badges";
 import { ImportReport } from "./ImportReport";
 import { RescanButton } from "./RescanButton";
 import { ResizablePanels } from "./ResizablePanels";
+import { ResizableSidebar } from "./ResizableSidebar";
 import { SymbolTree } from "./SymbolTree";
 import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
@@ -268,7 +269,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           <span
-            className={`hidden rounded-full px-2.5 py-1 text-[11px] ring-1 ring-inset sm:inline ${ai.configured ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/40" : "bg-slate-800 text-slate-400 ring-slate-700"}`}
+            className={`hidden rounded-full px-2.5 py-1 text-xs ring-1 ring-inset sm:inline ${ai.configured ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/40" : "bg-slate-800 text-slate-400 ring-slate-700"}`}
             title="模型密钥只在服务端读取"
           >
             {ai.configured ? `AI · ${ai.model}` : "AI 未配置 · 静态摘要"}
@@ -282,9 +283,9 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
       <div className="flex min-h-0 flex-1">
         {showSidebar && (
-          <aside aria-label="项目文件与符号" className={`atlas-sidebar ${exploring ? "w-52 xl:w-64" : "w-60 xl:w-72"} shrink-0 border-r border-slate-800`}>
+          <ResizableSidebar>
             <SymbolTree tree={tree} selectedId={selectedId} onSelect={selectFromTree} />
-          </aside>
+          </ResizableSidebar>
         )}
 
         {projectOverview ? (
@@ -311,7 +312,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     <button onClick={() => selectFromTree(s.id)} className="flex w-full items-center gap-2 rounded-lg bg-slate-900/60 px-3 py-2 text-left hover:bg-slate-800">
                       <KindIcon kind={s.kind} />
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-100">{s.qualifiedName}</span>
-                      <span className="truncate text-[11px] text-slate-500">{fileById.get(s.fileId)?.path}</span>
+                      <span className="truncate text-xs text-slate-500">{fileById.get(s.fileId)?.path}</span>
                     </button>
                   </li>
                 ))}
@@ -343,9 +344,9 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     <KindIcon kind={shown.symbol.kind} />
                     <span className="min-w-0 truncate" title={shown.file.path}>
                       {shown.file.path}
-                      <span className="text-slate-600"> › </span>
+                      <span className="text-slate-500"> › </span>
                       <span className="text-slate-200">{shown.symbol.qualifiedName}</span>
-                      <span className="text-slate-600">
+                      <span className="text-slate-500">
                         {" "}
                         L{shown.symbol.startLine}–{shown.symbol.endLine}
                       </span>
@@ -396,7 +397,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 )}
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-800 bg-slate-950/70 px-3 py-1.5 text-[11px] text-slate-400">
+              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-800 bg-slate-950/70 px-3 py-1.5 text-xs text-slate-400">
                 {structural ? <span>结构节点表示文档包含关系；可在左侧展开，或点击讲解中的子节点继续浏览。</span> : <>
                 <span>点击带下划线的调用跳转：</span>
                 <span className="border-b-2 border-emerald-400">确定</span>
@@ -420,7 +421,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                       className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${activeTab === t.key ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-400 hover:text-slate-200"}`}
                     >
                       {t.label}
-                      {t.count !== undefined && <span className="ml-1 text-[11px] text-slate-500">{t.count}</span>}
+                      {t.count !== undefined && <span className="ml-1 text-xs text-slate-500">{t.count}</span>}
                     </button>
                   ))}
                 </div>

@@ -13,7 +13,7 @@ const STYLE: Record<ResolutionT, string> = {
 export function ConfidenceBadge({ level, score }: { level: ResolutionT; score?: number }) {
   const meta = RESOLUTION_LABELS[level];
   return (
-    <span title={meta.hint} className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${STYLE[level]}`}>
+    <span title={meta.hint} className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${STYLE[level]}`}>
       {meta.label}
       {typeof score === "number" && level !== "exact" ? <span className="opacity-70">{Math.round(score * 100)}%</span> : null}
     </span>
@@ -30,7 +30,7 @@ const TEST_STYLE: Record<string, { label: string; cls: string; hint: string }> =
 export function TestConfidenceBadge({ level, score }: { level: string; score?: number }) {
   const m = TEST_STYLE[level] ?? TEST_STYLE.heuristic;
   return (
-    <span title={m.hint} className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${m.cls}`}>
+    <span title={m.hint} className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset ${m.cls}`}>
       {m.label}
       {typeof score === "number" && level !== "exact" ? <span className="opacity-70">{Math.round(score * 100)}%</span> : null}
     </span>
@@ -68,7 +68,7 @@ export function Chip({ children, title, tone = "slate" }: { children: React.Reac
     rose: "bg-rose-500/20 text-rose-200",
   };
   return (
-    <span title={title} className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] ${tones[tone]}`}>
+    <span title={title} className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${tones[tone]}`}>
       {children}
     </span>
   );

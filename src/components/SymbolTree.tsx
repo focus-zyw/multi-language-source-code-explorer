@@ -154,12 +154,13 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
         <button
           id={`sym-${s.id}`}
           onClick={() => onSelect(s.id)}
-          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25 text-slate-100" : "text-slate-300"}`}
+          aria-current={selectedId === s.id ? "true" : undefined}
+          className={`atlas-symbol flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pl-1.5 pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/15 text-slate-100" : "text-slate-300"}`}
           title={s.qualifiedName}
         >
           <KindIcon kind={s.kind} />
           <span className="min-w-0 flex-1 truncate">{s.name}</span>
-          <span className="shrink-0 text-[10px] text-slate-600">{s.startLine}</span>
+          <span className="shrink-0 text-xs text-slate-500">{s.startLine}</span>
         </button>
         </div>
         {(!structural || !collapsed) && <>
@@ -184,16 +185,16 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
           className="flex w-full items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] text-slate-200 hover:bg-slate-800"
           title={f.path + (f.hasSyntaxErrors ? "（含语法错误，解析可能不完整）" : "")}
         >
-          <span className="w-3 text-[10px] text-slate-500">{open ? "▾" : "▸"}</span>
+          <span className="w-3 text-xs text-slate-500">{open ? "▾" : "▸"}</span>
           <span className={`h-2 w-2 shrink-0 rounded-full ${LANG_DOT[f.language] ?? "bg-slate-400"}`} />
           <span className="min-w-0 flex-1 truncate">{f.path.split("/").pop()}</span>
-          {f.isTest && <span className="rounded bg-emerald-500/20 px-1 text-[10px] text-emerald-300">test</span>}
-          {f.hasSyntaxErrors && <span className="text-[10px] text-amber-400" title="含语法错误">⚠</span>}
-          <span className="shrink-0 text-[10px] text-slate-600">{count}</span>
+          {f.isTest && <span className="rounded bg-emerald-500/20 px-1 text-xs text-emerald-300">test</span>}
+          {f.hasSyntaxErrors && <span className="text-xs text-amber-400" title="含语法错误">⚠</span>}
+          <span className="shrink-0 text-xs text-slate-500">{count}</span>
         </button>
         {open && top.map((s) => renderSym(s, depth + 1))}
         {open && top.length === 0 && (
-          <div style={{ paddingLeft: 8 + (depth + 1) * 14 }} className="py-1 text-xs text-slate-600">
+          <div style={{ paddingLeft: 8 + (depth + 1) * 14 }} className="py-1 text-xs text-slate-500">
             （没有函数/类）
           </div>
         )}
@@ -214,7 +215,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
                 style={{ paddingLeft: 8 + depth * 14 }}
                 className="flex w-full items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] text-slate-400 hover:bg-slate-800"
               >
-                <span className="w-3 text-[10px] text-slate-500">{open ? "▾" : "▸"}</span>
+                <span className="w-3 text-xs text-slate-500">{open ? "▾" : "▸"}</span>
                 <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z" /></svg><span className="truncate">{d.name}</span>
               </button>
               {open && renderDir(d, depth + 1)}
@@ -229,13 +230,13 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-3 border-b border-slate-800 p-3">
-        <p className="text-[11px] font-medium tracking-wider text-slate-500">项目目录</p>
+        <p className="text-xs font-medium tracking-wider text-slate-500">项目目录</p>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索函数 / 结构节点 / 文件…"
           aria-label="搜索函数、结构节点或文件"
-          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400"
+          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-indigo-400"
         />
         <div className="atlas-segmented" role="group" aria-label="文件筛选">
           {(
@@ -265,13 +266,14 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
                   key={s.id}
                   id={`sym-${s.id}`}
                   onClick={() => onSelect(s.id)}
-                  className={`block w-full rounded px-2 py-1 text-left hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25" : ""}`}
+                  aria-current={selectedId === s.id ? "true" : undefined}
+                  className={`atlas-symbol block w-full rounded px-2 py-1 text-left hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/15" : ""}`}
                 >
                   <div className="flex items-center gap-1.5 text-[13px] text-slate-200">
                     <KindIcon kind={s.kind} />
                     <span className="truncate">{s.qualifiedName}</span>
                   </div>
-                  <div className="truncate pl-5 text-[11px] text-slate-500">{fileById.get(s.fileId)?.path}:{s.startLine}</div>
+                  <div className="truncate pl-5 text-xs text-slate-500">{fileById.get(s.fileId)?.path}:{s.startLine}</div>
                 </button>
               ))}
               {results.length >= 200 && <div className="p-2 text-center text-xs text-slate-500">仅显示前 200 条，请缩小搜索范围</div>}

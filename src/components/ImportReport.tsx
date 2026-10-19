@@ -87,10 +87,10 @@ export function ImportReport({ project, onClose }: { project: ProjectInfo; onClo
           {project.skipped.samples.length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-xs text-indigo-300">查看示例路径（{project.skipped.samples.length}）</summary>
-              <ul className="mt-2 max-h-56 space-y-0.5 overflow-y-auto font-mono text-[11px] text-slate-400">
+              <ul className="mt-2 max-h-56 space-y-0.5 overflow-y-auto font-mono text-xs text-slate-400">
                 {project.skipped.samples.map((s, i) => (
                   <li key={i} className="flex gap-3">
-                    <span className="shrink-0 text-slate-600">{SKIP_REASON_LABELS[s.reason]?.split("（")[0] ?? s.reason}</span>
+                    <span className="shrink-0 text-slate-500">{SKIP_REASON_LABELS[s.reason]?.split("（")[0] ?? s.reason}</span>
                     <span className="min-w-0 break-all">{s.path}</span>
                   </li>
                 ))}

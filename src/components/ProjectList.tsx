@@ -42,15 +42,15 @@ export function ProjectList({ projects }: { projects: ProjectListItem[] }) {
               {p.sourcePath && <p className="mt-1 truncate font-mono text-xs text-slate-500" title={p.sourcePath}>{p.sourcePath}</p>}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {Object.entries(p.languages).map(([l, n]) => (
-                  <span key={l} className="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-300">
+                  <span key={l} className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">
                     {LANG_LABEL[l] ?? l} {n}
                   </span>
                 ))}
                 {p.stats && (
                   <>
-                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-300">确定引用 {p.stats.refs.exact}</span>
-                    <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[11px] text-sky-300">推断 {p.stats.refs.inferred}</span>
-                    <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-300">无法解析 {p.stats.refs.unresolved}</span>
+                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">确定引用 {p.stats.refs.exact}</span>
+                    <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-xs text-sky-300">推断 {p.stats.refs.inferred}</span>
+                    <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-xs text-rose-300">无法解析 {p.stats.refs.unresolved}</span>
                   </>
                 )}
               </div>

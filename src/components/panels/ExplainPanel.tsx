@@ -103,7 +103,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
       <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-[1em] font-semibold text-slate-200">静态摘要</h3>
-          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400" title="由语法分析与度量直接生成，不含模型推测">
+          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400" title="由语法分析与度量直接生成，不含模型推测">
             语法分析生成 · 非 AI
           </span>
         </div>
@@ -111,7 +111,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
         <ul className="mt-2 space-y-1 leading-[1.7] text-slate-400">
           {summary.bullets.map((b, i) => (
             <li key={i} className="flex gap-2">
-              <span className="text-slate-600">•</span>
+              <span className="text-slate-500">•</span>
               <span className="min-w-0 break-words">{b}</span>
             </li>
           ))}
@@ -148,8 +148,8 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
         {cached ? (
           <>
             <Markdown text={cached.explanation} />
-            {cached.relativeLines && <p className="mt-2 text-[11px] text-slate-500">讲解中的“{structural ? "片段" : "方法"}内行号”以当前{structural ? "节点" : "方法"}的第一行为第 1 行。</p>}
-            <p className="mt-3 text-[11px] text-slate-500">
+            {cached.relativeLines && <p className="mt-2 text-xs text-slate-500">讲解中的“{structural ? "片段" : "方法"}内行号”以当前{structural ? "节点" : "方法"}的第一行为第 1 行。</p>}
+            <p className="mt-3 text-xs text-slate-500">
               由 {cached.model ?? "模型"} 生成{cached.generatedAt ? ` · ${new Date(cached.generatedAt).toLocaleString("zh-CN")}` : ""} · AI 内容可能有误，请对照源码阅读
             </p>
           </>
@@ -180,7 +180,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
                 <button onClick={() => onNavigate(c.id)} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[13px] text-slate-300 hover:bg-slate-800">
                   <KindIcon kind={c.kind} />
                   <span className="truncate">{c.name}</span>
-                  <span className="ml-auto text-[10px] text-slate-600">L{c.startLine}</span>
+                  <span className="ml-auto text-xs text-slate-500">L{c.startLine}</span>
                 </button>
               </li>
             ))}

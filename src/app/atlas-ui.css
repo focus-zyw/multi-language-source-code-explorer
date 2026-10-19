@@ -24,9 +24,12 @@
   .atlas-tabs > button[aria-pressed="true"] { border-bottom-color: var(--atlas-clay); color: var(--atlas-text); background: rgb(217 119 87 / 7%); }
   .atlas-composer { margin: .75rem; border: 1px solid var(--atlas-border); border-radius: 1rem; background: var(--atlas-surface); box-shadow: var(--atlas-shadow); }
   .atlas-composer:focus-within { border-color: var(--atlas-clay); }
-  .atlas-composer textarea { min-height: 5.5rem; max-height: 35vh; border: 0; background: transparent; padding: .5rem; line-height: 1.7; }
+  .atlas-composer textarea { min-height: 44px; max-height: 200px; border: 0; background: transparent; padding: .5rem; line-height: 1.7; }
   .atlas-composer textarea:focus-visible { outline-offset: 0; border-radius: .4rem; }
   .atlas-question { border-bottom: 1px solid var(--atlas-border); padding-bottom: 1.5rem; }
+  .atlas-question-help { max-height: 30vh; overflow-y: auto; }
+  .atlas-sidebar-resizer:hover, .atlas-sidebar-resizer:focus-visible { background: color-mix(in srgb, var(--atlas-clay) 30%, transparent); }
+  .atlas-symbol[aria-current="true"] { box-shadow: inset 3px 0 var(--atlas-clay); font-weight: 600; }
   .atlas-question-prompt { margin-bottom: 1rem; border-radius: .75rem; background: var(--atlas-elevated); padding: .85rem 1rem; line-height: 1.7; }
   .atlas-workspace .react-flow { --xy-background-color: var(--atlas-canvas); --xy-background-color-default: var(--atlas-canvas); --xy-controls-button-background-color-default: var(--atlas-elevated); --xy-controls-button-background-color-hover-default: var(--atlas-border); --xy-controls-button-color-default: var(--atlas-text); --xy-controls-button-border-color-default: var(--atlas-border); }
 
