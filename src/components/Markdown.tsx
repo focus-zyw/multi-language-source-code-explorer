@@ -4,16 +4,20 @@ import type { ReactNode } from "react";
  * 极简且安全的 Markdown 渲染（标题、列表、代码块、行内代码、粗体）。
  * 不使用 dangerouslySetInnerHTML：模型输出中的任何 HTML 都会被当作纯文本显示。
  */
-function inline(text: string, keyBase: string): ReactNode[] {
+function inline(text: string, keyBase: string, onSourceLink?: (href: string) => (() => void) | null): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  const re = /(\[[^\]\n]+\]\(source:[^\s)]+\)|`[^`]+`|\*\*[^*]+\*\*)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     const tok = m[0];
-    if (tok.startsWith("`")) {
+    if (tok.startsWith("[")) {
+      const match = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok)!;
+      const action = onSourceLink?.(match[2]);
+      out.push(action ? <button key={`${keyBase}-${i++}`} onClick={action} className="rounded text-indigo-300 underline underline-offset-2 hover:text-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-400">{match[1]}</button> : <span key={`${keyBase}-${i++}`}>{match[1]}（引用暂不可定位）</span>);
+    } else if (tok.startsWith("`")) {
       out.push(
         <code key={`${keyBase}-${i++}`} className="rounded bg-slate-800 px-1 py-0.5 font-mono text-[0.9em] text-amber-200">
           {tok.slice(1, -1)}
@@ -32,7 +36,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
   return out;
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, onSourceLink }: { text: string; onSourceLink?: (href: string) => (() => void) | null }) {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -55,7 +59,7 @@ export function Markdown({ text }: { text: string }) {
     if (h) {
       blocks.push(
         <h4 key={key++} className="mt-4 mb-1.5 text-[1.067em] font-semibold text-indigo-200">
-          {inline(h[2], `h${key}`)}
+          {inline(h[2], `h${key}`, onSourceLink)}
         </h4>,
       );
       i++;
@@ -69,7 +73,7 @@ export function Markdown({ text }: { text: string }) {
       blocks.push(
         <Tag key={key++} className={`my-1.5 space-y-1 pl-5 leading-[1.7] text-slate-300 ${ordered ? "list-decimal" : "list-disc"}`}>
           {items.map((it, j) => (
-            <li key={j}>{inline(it, `li${key}-${j}`)}</li>
+            <li key={j}>{inline(it, `li${key}-${j}`, onSourceLink)}</li>
           ))}
         </Tag>,
       );
@@ -83,7 +87,7 @@ export function Markdown({ text }: { text: string }) {
     while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\s*([-*]|\d+\.)\s+|```)/.test(lines[i])) para.push(lines[i++]);
     blocks.push(
       <p key={key++} className="my-1.5 leading-[1.7] text-slate-300">
-        {inline(para.join(" "), `p${key}`)}
+        {inline(para.join(" "), `p${key}`, onSourceLink)}
       </p>,
     );
   }

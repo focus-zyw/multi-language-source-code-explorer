@@ -44,13 +44,15 @@ const LABEL: Record<string, string> = {
   unresolved: "无法解析",
 };
 
-export default function MonacoEditor({ content, language, fileKey, range, mode, refs, highlight, onRefClick, fontSize = 14 }: CodeViewerProps) {
+export default function MonacoEditor({ content, language, fileKey, range, mode, refs, highlight, onRefClick, onSelection, fontSize = 14 }: CodeViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const decoRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
   const offsetRef = useRef(0);
   const refsRef = useRef<ViewerRef[]>([]);
   const clickRef = useRef(onRefClick);
+  const selectionRef = useRef(onSelection);
+  useEffect(() => { selectionRef.current = onSelection; }, [onSelection]);
   useEffect(() => { clickRef.current = onRefClick; }, [onRefClick]);
 
   useEffect(() => {
@@ -88,7 +90,12 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
       const hit = refsRef.current.find((r) => r.line === line && r.endLine === line && col >= r.col && col <= r.endCol);
       if (hit) clickRef.current(hit.id);
     });
+    const selectionSub = editor.onDidChangeCursorSelection((event) => {
+      const text = editor.getModel()?.getValueInRange(event.selection).slice(0, 6000) ?? "";
+      selectionRef.current?.(text.trim() ? { text, startLine: event.selection.startLineNumber + offsetRef.current, endLine: event.selection.endLineNumber + offsetRef.current } : null);
+    });
     return () => {
+      selectionSub.dispose();
       sub.dispose();
       decoRef.current?.clear();
       editor.getModel()?.dispose();

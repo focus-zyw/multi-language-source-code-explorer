@@ -89,6 +89,18 @@ export const symbolExplanations = sqliteTable("symbol_explanations", {
   generatedAt: integer("generated_at", { mode: "timestamp_ms" }).notNull(),
 }, (t) => [uniqueIndex("symbol_explanations_config_idx").on(t.symbolId, t.backend, t.configKey)]);
 
+// Project-scoped identity survives symbol/file replacement during rescans.
+export const symbolQuestions = sqliteTable("symbol_questions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  identity: text("identity").notNull(), backend: text("backend").notNull(),
+  requestId: text("request_id").notNull(), fingerprint: text("fingerprint").notNull(),
+  question: text("question").notNull(), quote: text("quote", { mode: "json" }).$type<import("@/lib/question-types").QuestionQuote | null>(),
+  sources: text("sources", { mode: "json" }).$type<import("@/lib/question-types").QuestionSource[]>().notNull(),
+  answer: text("answer"), status: text("status").notNull(), model: text("model"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (t) => [index("symbol_questions_owner_idx").on(t.projectId, t.identity, t.backend), uniqueIndex("symbol_questions_request_idx").on(t.projectId, t.requestId)]);
+
 export const refs = sqliteTable(
   "refs",
   {

@@ -14,6 +14,8 @@ import { ResizablePanels } from "./ResizablePanels";
 import { SymbolTree } from "./SymbolTree";
 import { ProjectOverview } from "./ProjectOverview";
 import { ExplainPanel } from "./panels/ExplainPanel";
+import { QuestionsPanel } from "./panels/QuestionsPanel";
+import type { QuestionQuote } from "@/lib/question-types";
 import { ReadingShortcutHint } from "./ReadingZoom";
 import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
 import { RefsPanel } from "./panels/RefsPanel";
@@ -32,7 +34,7 @@ const CallTreeExplorer = dynamic(() => import("./CallTreeExplorer"), {
   loading: () => <div className="p-8 text-center text-sm text-slate-500">正在加载流程探索…</div>,
 });
 
-type Tab = "explain" | "refs" | "tests" | "flow" | "vars";
+type Tab = "explain" | "questions" | "refs" | "tests" | "flow" | "vars";
 type Scoped<T> = T & { forId: number | null };
 interface AnalysisState {
   id: number | null;
@@ -59,6 +61,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const cache = useRef(new Map<number, SymbolDetail>());
 
   const [tab, setTab] = useState<Tab>("explain");
+  const [codeQuote, setCodeQuote] = useState<{ forId: number; quote: QuestionQuote } | null>(null);
+  const [questionQuote, setQuestionQuote] = useState<{ forId: number; quote: QuestionQuote | null } | null>(null);
   const [mode, setMode] = useState<"method" | "file">("method");
   const [showSidebar, setShowSidebar] = useState(true);
   const [showReport, setShowReport] = useState(false);
@@ -226,8 +230,11 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const focus = focusRef && focusRef.forId === selectedId ? focusRef.id : null;
 
   const structural = ["element", "property"].includes(shown?.symbol.kind ?? "");
+  const activeTab = structural && tab !== "questions" ? "explain" : tab;
+  const ask = (quote: QuestionQuote | null) => { if (shown) setQuestionQuote({ forId: shown.symbol.id, quote }); setTab("questions"); };
   const tabs: { key: Tab; label: string; count?: string }[] = [
     { key: "explain", label: "讲解" },
+    { key: "questions", label: "问答" },
     ...(!structural ? [{ key: "refs" as const, label: "引用", count: shown ? `${shown.outgoing.length}·${shown.incoming.length}` : undefined },
     { key: "tests" as const, label: "关联测试", count: shown ? String(new Set(shown.tests.map((t) => t.otherSymbolId)).size) : undefined },
     { key: "flow" as const, label: "流程图" },
@@ -348,6 +355,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                   <span className="flex-1 text-xs text-slate-500">{loading ? "加载中…" : ""}</span>
                 )}
                 <div className="flex shrink-0 rounded-md bg-slate-900 p-0.5 text-xs">
+                  <button onMouseDown={(event) => event.preventDefault()} onClick={() => ask(codeQuote && codeQuote.forId === shown?.symbol.id ? codeQuote.quote : null)} disabled={!current} title="选中代码后引用提问；未选中则提问当前方法" className="rounded px-2 py-1 text-indigo-300 hover:bg-slate-800 disabled:opacity-50">问 AI</button>
                   <button onClick={() => setMode("method")} className={`rounded px-2 py-1 ${mode === "method" ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400"}`}>
                     {structural ? "当前节点" : "仅方法"}
                   </button>
@@ -379,6 +387,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     refs={viewerRefs}
                     highlight={hl}
                     onRefClick={onRefClick}
+                    onSelection={(selection) => setCodeQuote(selection ? { forId: shown.symbol.id, quote: { kind: "code", ...selection } } : null)}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
@@ -405,7 +414,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     <button
                       key={t.key}
                       onClick={() => setTab(t.key)}
-                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${(structural ? "explain" : tab) === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${activeTab === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
                     >
                       {t.label}
                       {t.count !== undefined && <span className="ml-1 text-[11px] text-slate-500">{t.count}</span>}
@@ -413,11 +422,13 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                   ))}
                 </div>
               </div>
-              <div className={`min-h-0 flex-1 ${!structural && tab === "flow" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
+              <div className={`min-h-0 flex-1 ${activeTab === "flow" || activeTab === "questions" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
                 {!shown ? (
                   <div className="p-8 text-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
-                ) : structural || tab === "explain" ? (
-                  <ExplainPanel projectId={project.id} detail={shown} onNavigate={(id) => navigate(id)} onAiUpdate={onAiUpdate} />
+                ) : activeTab === "questions" ? (
+                  <QuestionsPanel key={`${project.id}:${shown.symbol.id}`} projectId={project.id} detail={shown} quote={questionQuote?.forId === shown.symbol.id ? questionQuote.quote : null} onClearQuote={() => setQuestionQuote(null)} onSource={(id, startLine, endLine) => { changeView("source", id); setMode("file"); setHighlight({ forId: id, startLine, endLine }); }} />
+                ) : activeTab === "explain" ? (
+                  <ExplainPanel projectId={project.id} detail={shown} onNavigate={(id) => navigate(id)} onAiUpdate={onAiUpdate} onAsk={ask} />
                 ) : tab === "refs" ? (
                   <RefsPanel detail={shown} focusRefId={focus} onNavigate={navigate} onHighlight={onHighlight} />
                 ) : tab === "tests" ? (

@@ -8,13 +8,16 @@ import { explanationTaskKey, explanationTasks } from "@/lib/explanation-tasks";
 import { Chip, KindIcon, kindLabel } from "../Badges";
 import { Markdown } from "../Markdown";
 import { ReadingZoom } from "../ReadingZoom";
+import { CopyQuestionContext } from "../CopyQuestionContext";
 import { STRUCTURE_PAGE_SIZE } from "@/lib/structure-browsing";
+import type { QuestionQuote } from "@/lib/question-types";
 
 interface Props {
   projectId: number;
   detail: SymbolDetail;
   onNavigate: (id: number) => void;
   onAiUpdate: (symbolId: number, backend: ExplanationBackend, ai: ExplanationResult) => void;
+  onAsk?: (quote: QuestionQuote | null) => void;
 }
 
 const PHASE_LABEL: Record<AgentPhase, string> = {
@@ -24,7 +27,7 @@ const PHASE_LABEL: Record<AgentPhase, string> = {
   finishing: "生成已完成，正在收尾并保存",
 };
 
-export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Props) {
+export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk }: Props) {
   const { symbol: s, summary, ai, file } = detail;
   const router = useRouter();
   const pathname = usePathname();
@@ -45,6 +48,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
     return () => clearInterval(interval);
   }, [loading]);
   const [showImports, setShowImports] = useState(false);
+  const [selection, setSelection] = useState<{ id: number; text: string } | null>(null);
   const [childrenPage, setChildrenPage] = useState({ id: s.id, limit: STRUCTURE_PAGE_SIZE });
   const childrenLimit = childrenPage.id === s.id ? childrenPage.limit : STRUCTURE_PAGE_SIZE;
 
@@ -61,11 +65,17 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate }: Prop
 
   return (
     <ReadingZoom region="explanation">
-    {(fontSize) => <div className="space-y-4 p-4" style={{ fontSize }}>
+    {(fontSize) => <div className="space-y-4 p-4" style={{ fontSize }} onMouseUp={(event) => {
+      if ((event.target as Element).closest("button,select,input,textarea")) return;
+      const selected = window.getSelection();
+      if (selected?.anchorNode && selected.focusNode && event.currentTarget.contains(selected.anchorNode) && event.currentTarget.contains(selected.focusNode)) setSelection({ id: s.id, text: selected.toString().slice(0, 6000) });
+    }}>
       <div>
         <div className="flex items-center gap-2">
           <KindIcon kind={s.kind} />
-          <h2 className="break-all text-[1.067em] font-semibold text-white">{s.qualifiedName}</h2>
+          <h2 className="min-w-0 flex-1 break-all text-[1.067em] font-semibold text-white">{s.qualifiedName}</h2>
+          {onAsk && <button onMouseDown={(event) => event.preventDefault()} onClick={() => onAsk(selection?.id === s.id && selection.text.trim() ? { kind: "explanation", text: selection.text } : null)} className="shrink-0 rounded px-2 py-1.5 text-xs text-indigo-300 hover:bg-slate-800" title="选中讲解后可引用提问；未选中则提问当前方法">问 AI</button>}
+          <CopyQuestionContext compact key={taskKey} detail={detail} backend={backend} explanation={cached} generating={loading} />
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Chip tone="indigo">{kindLabel(s.kind)}</Chip>

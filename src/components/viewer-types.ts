@@ -18,6 +18,7 @@ export interface ViewerHighlight {
 }
 
 export interface CodeViewerProps {
+  onSelection?: (selection: { text: string; startLine: number; endLine: number } | null) => void;
   fontSize?: number;
   content: string;
   language: string;
