@@ -1,5 +1,7 @@
 # 源码学习台（Code Atlas）
 
+界面采用暖灰深色表面与陶土色强调，沿用本机系统字体。样式精选改编自 Open Claude UI，详见[分阶段引入说明](docs/frontend-polish.md)与[第三方许可](THIRD_PARTY_NOTICES.md)。
+
 独立的多语言源码学习 Web 应用：**导入源码项目（本地路径、文件夹或 ZIP）→ 浏览函数/方法 → 阅读源码与讲解 → 查看关联测试 → 点击引用跳转 → 单方法流程图、关键变量定义与引用**。
 
 当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java / Vue 单文件组件 / HTML / JSON**；解析层是语言插件架构，可扩展其他语言。

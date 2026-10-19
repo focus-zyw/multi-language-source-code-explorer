@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./atlas-theme.css";
 
 :root {
   color-scheme: dark;
@@ -10,14 +11,14 @@ body {
 }
 
 body {
-  background: #0b1020;
-  color: #e2e8f0;
+  background: var(--atlas-canvas);
+  color: var(--atlas-text);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: var(--atlas-border) transparent;
 }
 
 /* Monaco：调用引用装饰（按解析可信度着色） */
