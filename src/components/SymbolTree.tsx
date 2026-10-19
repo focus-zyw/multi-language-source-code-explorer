@@ -215,7 +215,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
                 className="flex w-full items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] text-slate-400 hover:bg-slate-800"
               >
                 <span className="w-3 text-[10px] text-slate-500">{open ? "▾" : "▸"}</span>
-                <span className="truncate">📁 {d.name}</span>
+                <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z" /></svg><span className="truncate">{d.name}</span>
               </button>
               {open && renderDir(d, depth + 1)}
             </div>
@@ -228,14 +228,16 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="space-y-2 border-b border-slate-800 p-2">
+      <div className="space-y-3 border-b border-slate-800 p-3">
+        <p className="text-[11px] font-medium tracking-wider text-slate-500">项目目录</p>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索函数 / 结构节点 / 文件…"
+          aria-label="搜索函数、结构节点或文件"
           className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400"
         />
-        <div className="flex gap-1">
+        <div className="atlas-segmented" role="group" aria-label="文件筛选">
           {(
             [
               ["all", "全部"],
@@ -246,6 +248,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
             <button
               key={k}
               onClick={() => setFilter(k)}
+              aria-pressed={filter === k}
               className={`flex-1 rounded px-2 py-1 text-xs ${filter === k ? "bg-indigo-500/30 text-indigo-100" : "bg-slate-800 text-slate-400 hover:text-slate-200"}`}
             >
               {label}

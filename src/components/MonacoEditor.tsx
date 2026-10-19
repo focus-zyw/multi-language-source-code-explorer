@@ -57,12 +57,25 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
 
   useEffect(() => {
     if (!hostRef.current) return;
+    const palette = getComputedStyle(document.documentElement);
+    monaco.editor.defineTheme("atlas-dark", {
+      base: "vs-dark", inherit: true, rules: [],
+      colors: {
+        "editor.background": palette.getPropertyValue("--atlas-canvas").trim(),
+        "editor.foreground": palette.getPropertyValue("--atlas-text").trim(),
+        "editorLineNumber.foreground": "#93938b",
+        "editorLineNumber.activeForeground": "#efb39b",
+        "editor.selectionBackground": "#d977573d",
+        "editor.inactiveSelectionBackground": "#d9775720",
+        "editorGutter.background": palette.getPropertyValue("--atlas-canvas").trim(),
+      },
+    });
     const editor = monaco.editor.create(hostRef.current, {
       value: "",
       language: "plaintext",
       readOnly: true,
       domReadOnly: true,
-      theme: "vs-dark",
+      theme: "atlas-dark",
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,

@@ -242,16 +242,16 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   ];
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0b1020]">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950 px-3">
-        <button onClick={() => setShowSidebar((v) => !v)} className="rounded px-2 py-1 text-slate-400 hover:bg-slate-800" title="显示/隐藏文件树">
-          ☰
+    <div className="atlas-workspace flex h-dvh flex-col overflow-hidden bg-slate-950">
+      <header className="atlas-toolbar flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b border-slate-800 px-4 py-2">
+        <button onClick={() => setShowSidebar((v) => !v)} aria-label="显示/隐藏文件树" aria-expanded={showSidebar} className="rounded-md p-2 text-slate-400 hover:bg-slate-800" title="显示/隐藏文件树">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>
         </button>
         <Link href="/" className="text-sm text-slate-400 hover:text-white">
           ← 项目
         </Link>
         <span className="text-slate-700">/</span>
-        <h1 className="min-w-0 truncate text-sm font-semibold text-white">{project.name}</h1>
+        <h1 className="min-w-0 max-w-52 truncate text-sm font-semibold text-slate-100" title={project.name}>{project.name}</h1>
         <div className="hidden gap-1.5 xl:flex">
           {Object.entries(project.languages).map(([l, n]) => (
             <Chip key={l}>
@@ -260,7 +260,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
           ))}
           <Chip>{project.symbolCount} 符号</Chip>
         </div>
-        <div className="ml-auto flex shrink-0 rounded-md bg-slate-900 p-0.5 text-xs" role="group" aria-label="工作区模式">
+        <div className="atlas-segmented ml-auto shrink-0" role="group" aria-label="工作区模式">
           <button onClick={() => changeView("source")} aria-pressed={!exploring} className={`rounded px-3 py-1.5 ${!exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>源码阅读</button>
           <button onClick={() => changeView("explore")} aria-pressed={exploring} className={`rounded px-3 py-1.5 ${exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>流程探索</button>
         </div>
@@ -280,7 +280,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
       <div className="flex min-h-0 flex-1">
         {showSidebar && (
-          <aside className={`${exploring ? "w-52 xl:w-64" : "w-72"} shrink-0 border-r border-slate-800 bg-slate-950/70`}>
+          <aside aria-label="项目文件与符号" className={`atlas-sidebar ${exploring ? "w-52 xl:w-64" : "w-60 xl:w-72"} shrink-0 border-r border-slate-800`}>
             <SymbolTree tree={tree} selectedId={selectedId} onSelect={selectFromTree} />
           </aside>
         )}
@@ -332,7 +332,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               </div>}
               {exploring && !explorationRoot && <div className="p-8 text-sm text-slate-400">探索起点已失效，请从左侧重新选择方法。<button onClick={() => restartTree(selectedId)} className="ml-2 text-indigo-300">使用当前方法</button></div>}
               <div className={exploring ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
-              <div className="flex h-10 shrink-0 items-center gap-2 border-b border-slate-800 bg-slate-950/70 px-3">
+              <div className="atlas-toolbar flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1">
                 <button onClick={() => router.back()} className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white" title="返回上一个浏览位置">
                   ← 返回
                 </button>
@@ -354,12 +354,12 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 ) : (
                   <span className="flex-1 text-xs text-slate-500">{loading ? "加载中…" : ""}</span>
                 )}
-                <div className="flex shrink-0 rounded-md bg-slate-900 p-0.5 text-xs">
+                <div className="atlas-segmented shrink-0" role="group" aria-label="源码范围">
                   <button onMouseDown={(event) => event.preventDefault()} onClick={() => ask(codeQuote && codeQuote.forId === shown?.symbol.id ? codeQuote.quote : null)} disabled={!current} title="选中代码后引用提问；未选中则提问当前方法" className="rounded px-2 py-1 text-indigo-300 hover:bg-slate-800 disabled:opacity-50">问 AI</button>
-                  <button onClick={() => setMode("method")} className={`rounded px-2 py-1 ${mode === "method" ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400"}`}>
+                  <button onClick={() => setMode("method")} aria-pressed={mode === "method"}>
                     {structural ? "当前节点" : "仅方法"}
                   </button>
-                  <button onClick={() => setMode("file")} className={`rounded px-2 py-1 ${mode === "file" ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400"}`}>
+                  <button onClick={() => setMode("file")} aria-pressed={mode === "file"}>
                     整个文件
                   </button>
                 </div>
@@ -407,13 +407,14 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               </div>
             </section>
 
-            <section className="flex min-h-0 min-w-0 flex-col bg-slate-950/40">
-              <div className="flex h-10 shrink-0 items-center border-b border-slate-800 bg-slate-950/70">
-                <div className="flex min-w-0 flex-1 overflow-x-auto">
+            <section aria-label="源码详情" className="flex min-h-0 min-w-0 flex-col bg-slate-950/40">
+              <div className="atlas-toolbar flex min-h-12 shrink-0 items-center border-b border-slate-800">
+                <div className="atlas-tabs flex min-w-0 flex-1 overflow-x-auto" role="group" aria-label="详情面板">
                   {tabs.map((t) => (
                     <button
                       key={t.key}
                       onClick={() => setTab(t.key)}
+                      aria-pressed={activeTab === t.key}
                       className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${activeTab === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
                     >
                       {t.label}

@@ -157,7 +157,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
         {!selected.available && <p className="mt-3 leading-[1.7] text-amber-200">
           {backend === "agent" ? "未检测到 Codex。请先安装并执行 codex login，再重启应用。" : "模型 API 未配置。请在服务端设置 AI_API_KEY 后重启，或切换到本机 Agent。"}
         </p>}
-        {selected.available && <button onClick={() => generate(!!cached)} disabled={loading} className="mt-3 min-h-11 min-w-32 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:bg-slate-700 disabled:text-slate-300">
+        {selected.available && <button onClick={() => generate(!!cached)} disabled={loading} className="atlas-primary mt-3 min-h-11 min-w-32 px-4 py-2 text-sm disabled:cursor-wait">
           {loading ? (backend === "agent" ? "Agent 正在分析…" : "正在生成…") : error ? "重试生成" : cached ? "重新生成" : "生成 AI 讲解"}
         </button>}
         {loading && <button onClick={stop} className="ml-2 mt-3 min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">停止分析</button>}

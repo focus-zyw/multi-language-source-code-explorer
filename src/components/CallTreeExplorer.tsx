@@ -193,7 +193,7 @@ function Explorer({ projectId, root, selectedId, direction, active, onDirection,
       {tree.truncated && <p role="status" className="bg-amber-500/10 px-3 py-2 text-xs text-amber-200">已显示 180 个节点。收起部分分支，或选中方法并设为新起点继续探索。</p>}
       <div className="min-h-0 flex-1" aria-label="方法调用探索树">
         <ReactFlow<CallNode> nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} onInit={setInstance} nodesDraggable={false} nodesConnectable={false} minZoom={0.15} maxZoom={1.5} fitView fitViewOptions={{ maxZoom: 1 }} colorMode="dark">
-          <Background color="#263047" gap={22} /><Controls showInteractive={false} />
+          <Background color="var(--atlas-border)" gap={22} /><Controls showInteractive={false} />
         </ReactFlow>
       </div>
       <div className="shrink-0 border-t border-slate-800 px-3 py-1.5 text-[11px] text-slate-500">连线表示静态调用关系，不代表执行顺序。绿色确定 · 蓝色推断 · 黄色虚线候选；循环路径停止展开。</div>

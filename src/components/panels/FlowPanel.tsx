@@ -107,8 +107,8 @@ function layout(graph: FlowGraph, selectedId: string | null): { nodes: Node<Node
       strokeDasharray: e.kind === "normal" ? undefined : "5 4",
       strokeWidth: 1.4,
     },
-    labelStyle: { fill: "#e2e8f0", fontSize: 11 },
-    labelBgStyle: { fill: "#0f172a", fillOpacity: 0.9 },
+    labelStyle: { fill: "var(--atlas-text)", fontSize: 11 },
+    labelBgStyle: { fill: "var(--atlas-surface)", fillOpacity: 0.9 },
     labelBgPadding: [4, 2] as [number, number],
   }));
   return { nodes, edges };
@@ -173,7 +173,7 @@ export default function FlowPanel({ state, onHighlight }: Props) {
             onHighlight(null);
           }}
         >
-          <Background color="#1e293b" gap={20} />
+          <Background color="var(--atlas-border)" gap={20} />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>

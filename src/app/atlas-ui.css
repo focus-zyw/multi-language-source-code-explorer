@@ -16,3 +16,24 @@
   .atlas-primary:hover:not(:disabled) { background: var(--atlas-clay-hover); }
   .atlas-primary:disabled { background: var(--atlas-elevated); color: var(--atlas-muted); cursor: not-allowed; opacity: .6; }
   .atlas-trust { border-top: 1px solid var(--atlas-border); padding-top: 1.5rem; }
+
+  .atlas-toolbar { background: var(--atlas-sidebar); }
+  .atlas-sidebar { background: var(--atlas-sidebar); }
+  .atlas-workspace .atlas-segmented > button { padding: .35rem .6rem; font-size: .75rem; white-space: nowrap; }
+  .atlas-tabs > button { min-height: 3rem; border-bottom-color: transparent; }
+  .atlas-tabs > button[aria-pressed="true"] { border-bottom-color: var(--atlas-clay); color: var(--atlas-text); background: rgb(217 119 87 / 7%); }
+  .atlas-composer { margin: .75rem; border: 1px solid var(--atlas-border); border-radius: 1rem; background: var(--atlas-surface); box-shadow: var(--atlas-shadow); }
+  .atlas-composer:focus-within { border-color: var(--atlas-clay); }
+  .atlas-composer textarea { min-height: 5.5rem; max-height: 35vh; border: 0; background: transparent; padding: .5rem; line-height: 1.7; }
+  .atlas-composer textarea:focus-visible { outline-offset: 0; border-radius: .4rem; }
+  .atlas-question { border-bottom: 1px solid var(--atlas-border); padding-bottom: 1.5rem; }
+  .atlas-question-prompt { margin-bottom: 1rem; border-radius: .75rem; background: var(--atlas-elevated); padding: .85rem 1rem; line-height: 1.7; }
+  .atlas-workspace .react-flow { --xy-background-color: var(--atlas-canvas); --xy-background-color-default: var(--atlas-canvas); --xy-controls-button-background-color-default: var(--atlas-elevated); --xy-controls-button-background-color-hover-default: var(--atlas-border); --xy-controls-button-color-default: var(--atlas-text); --xy-controls-button-border-color-default: var(--atlas-border); }
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, a, input, textarea, select, .atlas-project) { transition: background-color 160ms var(--atlas-ease), border-color 160ms var(--atlas-ease), color 160ms var(--atlas-ease), box-shadow 160ms var(--atlas-ease); }
+  .atlas-primary:active:not(:disabled) { transform: translateY(1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atlas-home *, .atlas-workspace * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

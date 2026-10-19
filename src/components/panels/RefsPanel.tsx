@@ -103,7 +103,7 @@ export function RefsPanel({ detail, focusRefId, onNavigate, onHighlight }: Props
                     {single && (
                       <button
                         onClick={() => onNavigate(single.symbolId, { text: `${o.calleeText} → ${single.name}：${o.reason}`, level: o.resolution })}
-                        className="shrink-0 rounded bg-indigo-500 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-400"
+                        className="atlas-primary shrink-0 px-2 py-1 text-[11px]"
                       >
                         跳转
                       </button>
