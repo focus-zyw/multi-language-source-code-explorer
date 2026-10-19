@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: `try{document.documentElement.dataset.theme=localStorage.getItem("code-atlas:theme:v1")==="dark"?"dark":"light"}catch{}` }} /></head>
       <body className="antialiased">{children}<ExplanationTasks /></body>
     </html>
   );

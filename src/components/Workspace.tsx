@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalysisResult, CallTreeDirection, CallTreeSymbol, ProjectInfo, SymbolDetail, TreeData } from "@/lib/api-types";
 import { RESOLUTION_LABELS, type ResolutionT } from "@/lib/shared";
 import { CodeViewer } from "./CodeViewer";
+import { ThemeToggle } from "./ThemeToggle";
 import { ConfidenceBadge, Chip, KindIcon, kindLabel } from "./Badges";
 import { ImportReport } from "./ImportReport";
 import { RescanButton } from "./RescanButton";
@@ -247,7 +248,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         <button onClick={() => setShowSidebar((v) => !v)} aria-label="显示/隐藏文件树" aria-expanded={showSidebar} className="rounded-md p-2 text-slate-400 hover:bg-slate-800" title="显示/隐藏文件树">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></svg>
         </button>
-        <Link href="/" className="text-sm text-slate-400 hover:text-white">
+        <Link href="/" className="text-sm text-slate-400 hover:text-slate-100">
           ← 项目
         </Link>
         <span className="text-slate-700">/</span>
@@ -261,10 +262,11 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
           <Chip>{project.symbolCount} 符号</Chip>
         </div>
         <div className="atlas-segmented ml-auto shrink-0" role="group" aria-label="工作区模式">
-          <button onClick={() => changeView("source")} aria-pressed={!exploring} className={`rounded px-3 py-1.5 ${!exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>源码阅读</button>
-          <button onClick={() => changeView("explore")} aria-pressed={exploring} className={`rounded px-3 py-1.5 ${exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-white"}`}>流程探索</button>
+          <button onClick={() => changeView("source")} aria-pressed={!exploring} className={`rounded px-3 py-1.5 ${!exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-slate-100"}`}>源码阅读</button>
+          <button onClick={() => changeView("explore")} aria-pressed={exploring} className={`rounded px-3 py-1.5 ${exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-slate-100"}`}>流程探索</button>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <span
             className={`hidden rounded-full px-2.5 py-1 text-[11px] ring-1 ring-inset sm:inline ${ai.configured ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/40" : "bg-slate-800 text-slate-400 ring-slate-700"}`}
             title="模型密钥只在服务端读取"
@@ -290,7 +292,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">
-              <h2 className="text-xl font-semibold text-white">开始浏览 {project.name}</h2>
+              <h2 className="text-xl font-semibold text-slate-100">开始浏览 {project.name}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
                 在左侧文件树选择一个函数、方法或结构节点，或搜索名称。阅读源码时，带下划线的调用可以点击跳转；
                 下划线样式表示解析可信度。
@@ -333,7 +335,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               {exploring && !explorationRoot && <div className="p-8 text-sm text-slate-400">探索起点已失效，请从左侧重新选择方法。<button onClick={() => restartTree(selectedId)} className="ml-2 text-indigo-300">使用当前方法</button></div>}
               <div className={exploring ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
               <div className="atlas-toolbar flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1">
-                <button onClick={() => router.back()} className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white" title="返回上一个浏览位置">
+                <button onClick={() => router.back()} className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-100" title="返回上一个浏览位置">
                   ← 返回
                 </button>
                 {shown ? (
@@ -415,7 +417,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                       key={t.key}
                       onClick={() => setTab(t.key)}
                       aria-pressed={activeTab === t.key}
-                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${activeTab === t.key ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200"}`}
+                      className={`shrink-0 border-b-2 px-3 py-2.5 text-[13px] ${activeTab === t.key ? "border-indigo-400 text-slate-100" : "border-transparent text-slate-400 hover:text-slate-200"}`}
                     >
                       {t.label}
                       {t.count !== undefined && <span className="ml-1 text-[11px] text-slate-500">{t.count}</span>}

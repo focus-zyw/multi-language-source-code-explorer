@@ -12,7 +12,7 @@
   .atlas-segmented > button { border-radius: .4rem; padding: .5rem .75rem; background: transparent; color: var(--atlas-muted); font-size: .8125rem; }
   .atlas-segmented > button[aria-pressed="true"] { background: var(--atlas-elevated); color: var(--atlas-text); box-shadow: 0 1px 3px rgb(0 0 0 / 20%); }
   .atlas-segmented > button:hover:not(:disabled) { color: var(--atlas-text); }
-  .atlas-primary { border: 1px solid transparent; border-radius: .6rem; background: var(--atlas-clay); color: #181412; font-weight: 600; }
+  .atlas-primary { border: 1px solid transparent; border-radius: .6rem; background: var(--atlas-clay); color: var(--atlas-on-clay); font-weight: 600; }
   .atlas-primary:hover:not(:disabled) { background: var(--atlas-clay-hover); }
   .atlas-primary:disabled { background: var(--atlas-elevated); color: var(--atlas-muted); cursor: not-allowed; opacity: .6; }
   .atlas-trust { border-top: 1px solid var(--atlas-border); padding-top: 1.5rem; }

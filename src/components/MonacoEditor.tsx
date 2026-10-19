@@ -57,25 +57,31 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const palette = getComputedStyle(document.documentElement);
-    monaco.editor.defineTheme("atlas-dark", {
-      base: "vs-dark", inherit: true, rules: [],
+    const applyTheme = () => {
+      const palette = getComputedStyle(document.documentElement);
+      const light = document.documentElement.dataset.theme === "light";
+      const name = light ? "atlas-light" : "atlas-dark";
+      monaco.editor.defineTheme(name, {
+      base: light ? "vs" : "vs-dark", inherit: true, rules: [],
       colors: {
         "editor.background": palette.getPropertyValue("--atlas-canvas").trim(),
         "editor.foreground": palette.getPropertyValue("--atlas-text").trim(),
-        "editorLineNumber.foreground": "#93938b",
-        "editorLineNumber.activeForeground": "#efb39b",
+        "editorLineNumber.foreground": light ? "#76766b" : "#93938b",
+        "editorLineNumber.activeForeground": palette.getPropertyValue("--atlas-clay").trim(),
         "editor.selectionBackground": "#d977573d",
         "editor.inactiveSelectionBackground": "#d9775720",
         "editorGutter.background": palette.getPropertyValue("--atlas-canvas").trim(),
       },
-    });
+      });
+      monaco.editor.setTheme(name);
+      return name;
+    };
     const editor = monaco.editor.create(hostRef.current, {
       value: "",
       language: "plaintext",
       readOnly: true,
       domReadOnly: true,
-      theme: "atlas-dark",
+      theme: applyTheme(),
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -95,6 +101,8 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace",
     });
     editorRef.current = editor;
+    const themeObserver = new MutationObserver(applyTheme);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     decoRef.current = editor.createDecorationsCollection([]);
     const sub = editor.onMouseDown((e) => {
       if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT || !e.target.position || !e.event.leftButton) return;
@@ -108,6 +116,7 @@ export default function MonacoEditor({ content, language, fileKey, range, mode, 
       selectionRef.current?.(text.trim() ? { text, startLine: event.selection.startLineNumber + offsetRef.current, endLine: event.selection.endLineNumber + offsetRef.current } : null);
     });
     return () => {
+      themeObserver.disconnect();
       selectionSub.dispose();
       sub.dispose();
       decoRef.current?.clear();

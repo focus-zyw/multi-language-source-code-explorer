@@ -1,5 +1,28 @@
 /* Adapted from open-claude-ui's CDS tokens. See THIRD_PARTY_NOTICES.md. */
 :root {
+  color-scheme: dark;
+  --atlas-on-clay: #181412;
+  --atlas-neutral-50: #faf9f5;
+  --atlas-neutral-100: var(--atlas-text);
+  --atlas-neutral-200: #e4e2d8;
+  --atlas-neutral-300: #ceccc2;
+  --atlas-neutral-400: var(--atlas-muted);
+  --atlas-neutral-500: #93938b;
+  --atlas-neutral-600: #73736c;
+  --atlas-neutral-700: var(--atlas-border);
+  --atlas-neutral-800: #292927;
+  --atlas-neutral-900: var(--atlas-surface);
+  --atlas-neutral-950: var(--atlas-canvas);
+  --atlas-accent-100: #fae4da;
+  --atlas-accent-200: #f3c5b2;
+  --atlas-accent-300: #efb39b;
+  --atlas-accent-400: var(--atlas-clay-hover);
+  --atlas-accent-500: var(--atlas-clay);
+  --atlas-accent-600: #bd6245;
+  --atlas-accent-700: #97472f;
+  --atlas-accent-800: #713824;
+  --atlas-accent-900: #4d2c22;
+  --atlas-accent-950: #301f19;
   --atlas-canvas: #151515;
   --atlas-sidebar: #1a1a19;
   --atlas-surface: #20201f;
@@ -16,27 +39,27 @@
 /* Bridge existing utilities so panels and dialogs share the same palette.
    Confidence, error, language and syntax colors retain their semantic hues. */
 @theme inline {
-  --color-slate-50: #faf9f5;
-  --color-slate-100: var(--atlas-text);
-  --color-slate-200: #e4e2d8;
-  --color-slate-300: #ceccc2;
-  --color-slate-400: var(--atlas-muted);
-  --color-slate-500: #93938b;
-  --color-slate-600: #73736c;
-  --color-slate-700: var(--atlas-border);
-  --color-slate-800: #292927;
-  --color-slate-900: var(--atlas-surface);
-  --color-slate-950: var(--atlas-canvas);
-  --color-indigo-100: #fae4da;
-  --color-indigo-200: #f3c5b2;
-  --color-indigo-300: #efb39b;
-  --color-indigo-400: var(--atlas-clay-hover);
-  --color-indigo-500: var(--atlas-clay);
-  --color-indigo-600: #bd6245;
-  --color-indigo-700: #97472f;
-  --color-indigo-800: #713824;
-  --color-indigo-900: #4d2c22;
-  --color-indigo-950: #301f19;
+  --color-slate-50: var(--atlas-neutral-50);
+  --color-slate-100: var(--atlas-neutral-100);
+  --color-slate-200: var(--atlas-neutral-200);
+  --color-slate-300: var(--atlas-neutral-300);
+  --color-slate-400: var(--atlas-neutral-400);
+  --color-slate-500: var(--atlas-neutral-500);
+  --color-slate-600: var(--atlas-neutral-600);
+  --color-slate-700: var(--atlas-neutral-700);
+  --color-slate-800: var(--atlas-neutral-800);
+  --color-slate-900: var(--atlas-neutral-900);
+  --color-slate-950: var(--atlas-neutral-950);
+  --color-indigo-100: var(--atlas-accent-100);
+  --color-indigo-200: var(--atlas-accent-200);
+  --color-indigo-300: var(--atlas-accent-300);
+  --color-indigo-400: var(--atlas-accent-400);
+  --color-indigo-500: var(--atlas-accent-500);
+  --color-indigo-600: var(--atlas-accent-600);
+  --color-indigo-700: var(--atlas-accent-700);
+  --color-indigo-800: var(--atlas-accent-800);
+  --color-indigo-900: var(--atlas-accent-900);
+  --color-indigo-950: var(--atlas-accent-950);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "SimSun", serif;
 }
@@ -49,4 +72,102 @@
   :where(button, select, summary):not(:disabled) { cursor: pointer; }
   :where(input, textarea) { accent-color: var(--atlas-clay); }
   ::selection { background: rgb(217 119 87 / 28%); }
+}
+
+:root {
+  --atlas-ref-exact: #34d399;
+  --atlas-ref-inferred: #38bdf8;
+  --atlas-ref-heuristic: #fbbf24;
+  --atlas-ref-external: #64748b;
+  --atlas-ref-unresolved: #fb7185;
+  --atlas-flow-edge: #94a3b8;
+  --atlas-flow-back: #a78bfa;
+}
+
+/* CDS warm paper surfaces; darker semantic inks keep badges legible. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --atlas-canvas: #fcfcfb;
+  --atlas-sidebar: #f9f9f7;
+  --atlas-surface: #ffffff;
+  --atlas-elevated: #f0efec;
+  --atlas-border: #d5d4cc;
+  --atlas-text: #24241f;
+  --atlas-muted: #57574e;
+  --atlas-clay: #b45332;
+  --atlas-clay-hover: #97472f;
+  --atlas-on-clay: #ffffff;
+  --atlas-shadow: 0 2px 8px rgb(20 20 19 / 4%), inset 0 1px rgb(255 255 255 / 70%);
+  --atlas-neutral-50: #141413;
+  --atlas-neutral-100: var(--atlas-text);
+  --atlas-neutral-200: #30302b;
+  --atlas-neutral-300: #48483f;
+  --atlas-neutral-400: var(--atlas-muted);
+  --atlas-neutral-500: #68685e;
+  --atlas-neutral-600: #76766b;
+  --atlas-neutral-700: var(--atlas-border);
+  --atlas-neutral-800: #eae9e4;
+  --atlas-neutral-900: var(--atlas-surface);
+  --atlas-neutral-950: var(--atlas-canvas);
+  --atlas-accent-100: #713824;
+  --atlas-accent-200: #873c27;
+  --atlas-accent-300: #a2482e;
+  --atlas-accent-400: var(--atlas-clay-hover);
+  --atlas-accent-500: var(--atlas-clay);
+  --atlas-accent-600: #bd6245;
+  --atlas-accent-700: #97472f;
+  --atlas-accent-800: #713824;
+  --atlas-accent-900: #4d2c22;
+  --atlas-accent-950: #301f19;
+  --atlas-ref-exact: #047857;
+  --atlas-ref-inferred: #0369a1;
+  --atlas-ref-heuristic: #a16207;
+  --atlas-ref-external: #64748b;
+  --atlas-ref-unresolved: #be123c;
+  --atlas-flow-edge: #68685e;
+  --atlas-flow-back: #7c3aed;
+  --color-emerald-100: #065f46;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-sky-100: #075985;
+  --color-sky-200: #075985;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-amber-100: #854d0e;
+  --color-amber-200: #854d0e;
+  --color-amber-300: #92400e;
+  --color-amber-400: #a16207;
+  --color-rose-100: #9f1239;
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+  --color-rose-400: #e11d48;
+  --color-violet-100: #5b21b6;
+  --color-violet-200: #5b21b6;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-fuchsia-100: #86198f;
+  --color-fuchsia-200: #86198f;
+  --color-fuchsia-300: #a21caf;
+  --color-fuchsia-400: #c026d3;
+  --color-orange-100: #9a3412;
+  --color-orange-200: #9a3412;
+  --color-orange-300: #c2410c;
+  --color-orange-400: #ea580c;
+  --color-yellow-100: #854d0e;
+  --color-yellow-200: #854d0e;
+  --color-yellow-300: #a16207;
+  --color-yellow-400: #a16207;
+  --color-blue-100: #1e40af;
+  --color-blue-200: #1e40af;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #2563eb;
+  --color-green-100: #166534;
+  --color-green-200: #166534;
+  --color-green-300: #15803d;
+  --color-green-400: #16a34a;
+  --color-cyan-100: #155e75;
+  --color-cyan-200: #155e75;
+  --color-cyan-300: #0e7490;
+  --color-cyan-400: #0891b2;
 }

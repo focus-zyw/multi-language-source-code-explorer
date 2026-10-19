@@ -1,5 +1,7 @@
 "use client";
 
+import { useTheme } from "./ThemeToggle";
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
@@ -33,7 +35,7 @@ type CardData = Record<string, unknown> & {
 type CallNode = Node<CardData>;
 const WIDTH = 280;
 const HEIGHT = 142;
-const COLORS = { exact: "#34d399", inferred: "#38bdf8", heuristic: "#fbbf24", external: "#64748b", unresolved: "#fb7185" };
+const COLORS = { exact: "var(--atlas-ref-exact)", inferred: "var(--atlas-ref-inferred)", heuristic: "var(--atlas-ref-heuristic)", external: "var(--atlas-ref-external)", unresolved: "var(--atlas-ref-unresolved)" };
 
 function CallCard({ data }: NodeProps<CallNode>) {
   const { item, selected, onToggle, onPick, onSource, onMeasure } = data;
@@ -65,7 +67,7 @@ function CallCard({ data }: NodeProps<CallNode>) {
       </div>
       <div title={item.subtitle} className="mt-1 shrink-0 text-[11px] leading-4 text-slate-400 [overflow-wrap:anywhere]">{item.subtitle}</div>
       <div title={item.reason ?? item.error} className="mt-1 min-h-8 shrink-0 text-[10px] leading-4 text-slate-500 [overflow-wrap:anywhere]">{item.reason ?? item.error ?? (item.type === "symbol" ? "点击名称查看详情，+ 展开下一层" : item.type === "terminal" ? "点击查看此处引用" : item.type === "candidates" ? "展开后分别查看候选，尚未确定实际目标" : "")}</div>
-      {item.symbol && <button onClick={() => onSource(item.symbol!.id)} className="nodrag nopan mt-2 shrink-0 self-start text-[10px] text-indigo-300 hover:text-white">查看源码 ↗</button>}
+      {item.symbol && <button onClick={() => onSource(item.symbol!.id)} className="nodrag nopan mt-2 shrink-0 self-start text-[10px] text-indigo-300 hover:text-slate-100">查看源码 ↗</button>}
       <Handle type="source" position={Position.Right} isConnectable={false} className="!bg-slate-500" />
     </div>
   );
@@ -80,6 +82,7 @@ export default function CallTreeExplorer({ projectId, root, selectedId, directio
 }
 
 function Explorer({ projectId, root, selectedId, direction, active, onDirection, onSelect, onInspect, onViewSource, onRestart, onProjectOverview, showTerminals, onBoundaries }: Props & { showTerminals: boolean; onBoundaries: (value: boolean) => void }) {
+  const theme = useTheme();
   const [pages, setPages] = useState<Map<number, CallTreeLoad>>(() => new Map());
   const cache = useRef(new Map<number, CallTreeLoad>());
   const requests = useRef(new Map<number, AbortController>());
@@ -154,7 +157,7 @@ function Explorer({ projectId, root, selectedId, direction, active, onDirection,
         data: { item, selected: item.symbol?.id === selectedId, onToggle: toggle, onPick: pick, onSource: onViewSource, onMeasure: measureCard } };
     });
     const edges: Edge[] = tree.edges.map((edge) => {
-      const color = edge.resolution ? COLORS[edge.resolution] : "#475569";
+      const color = edge.resolution ? COLORS[edge.resolution] : "var(--atlas-flow-edge)";
       return { ...edge, type: "smoothstep", markerEnd: direction === "outgoing" ? { type: MarkerType.ArrowClosed, color } : undefined,
         markerStart: direction === "incoming" ? { type: MarkerType.ArrowClosed, color } : undefined,
         style: { stroke: color, strokeWidth: 1.5, strokeDasharray: edge.resolution === "heuristic" ? "5 4" : undefined } };
@@ -192,7 +195,7 @@ function Explorer({ projectId, root, selectedId, direction, active, onDirection,
       </div>
       {tree.truncated && <p role="status" className="bg-amber-500/10 px-3 py-2 text-xs text-amber-200">已显示 180 个节点。收起部分分支，或选中方法并设为新起点继续探索。</p>}
       <div className="min-h-0 flex-1" aria-label="方法调用探索树">
-        <ReactFlow<CallNode> nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} onInit={setInstance} nodesDraggable={false} nodesConnectable={false} minZoom={0.15} maxZoom={1.5} fitView fitViewOptions={{ maxZoom: 1 }} colorMode="dark">
+        <ReactFlow<CallNode> nodes={graph.nodes} edges={graph.edges} nodeTypes={nodeTypes} onInit={setInstance} nodesDraggable={false} nodesConnectable={false} minZoom={0.15} maxZoom={1.5} fitView fitViewOptions={{ maxZoom: 1 }} colorMode={theme}>
           <Background color="var(--atlas-border)" gap={22} /><Controls showInteractive={false} />
         </ReactFlow>
       </div>

@@ -2,10 +2,6 @@
 @import "./atlas-theme.css";
 @import "./atlas-ui.css";
 
-:root {
-  color-scheme: dark;
-}
-
 html,
 body {
   height: 100%;
@@ -29,22 +25,22 @@ body {
   border-radius: 2px;
 }
 .ref-exact {
-  text-decoration: underline solid #34d399;
+  text-decoration: underline solid var(--atlas-ref-exact);
   background: rgba(52, 211, 153, 0.12);
 }
 .ref-inferred {
-  text-decoration: underline solid #38bdf8;
+  text-decoration: underline solid var(--atlas-ref-inferred);
   background: rgba(56, 189, 248, 0.12);
 }
 .ref-heuristic {
-  text-decoration: underline dashed #fbbf24;
+  text-decoration: underline dashed var(--atlas-ref-heuristic);
   background: rgba(251, 191, 36, 0.12);
 }
 .ref-external {
-  text-decoration: underline dotted #64748b;
+  text-decoration: underline dotted var(--atlas-ref-external);
 }
 .ref-unresolved {
-  text-decoration: underline wavy #fb7185;
+  text-decoration: underline wavy var(--atlas-ref-unresolved);
   background: rgba(251, 113, 133, 0.08);
 }
 .sym-bg {

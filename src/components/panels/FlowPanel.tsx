@@ -1,5 +1,7 @@
 "use client";
 
+import { useTheme } from "../ThemeToggle";
+
 import { useMemo, useState } from "react";
 import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -59,7 +61,7 @@ function FlowNodeView({ data }: NodeProps<Node<NodeData>>) {
       {node.calls.length > 0 && (
         <div className="mt-1 flex max-w-full flex-wrap justify-center gap-1">
           {node.calls.slice(0, 3).map((c) => (
-            <span key={c} className="max-w-[140px] truncate rounded bg-black/30 px-1 text-[10px] text-emerald-300" title={`调用 ${c}`}>
+            <span key={c} className="max-w-[140px] truncate rounded bg-slate-950/50 px-1 text-[10px] text-emerald-300" title={`调用 ${c}`}>
               ƒ {c}
             </span>
           ))}
@@ -101,9 +103,9 @@ function layout(graph: FlowGraph, selectedId: string | null): { nodes: Node<Node
     target: e.target,
     label: e.label,
     type: "smoothstep",
-    markerEnd: { type: MarkerType.ArrowClosed, color: e.kind === "exception" ? "#fb7185" : e.kind === "back" ? "#a78bfa" : "#94a3b8" },
+    markerEnd: { type: MarkerType.ArrowClosed, color: e.kind === "exception" ? "var(--atlas-ref-unresolved)" : e.kind === "back" ? "var(--atlas-flow-back)" : "var(--atlas-flow-edge)" },
     style: {
-      stroke: e.kind === "exception" ? "#fb7185" : e.kind === "back" ? "#a78bfa" : "#94a3b8",
+      stroke: e.kind === "exception" ? "var(--atlas-ref-unresolved)" : e.kind === "back" ? "var(--atlas-flow-back)" : "var(--atlas-flow-edge)",
       strokeDasharray: e.kind === "normal" ? undefined : "5 4",
       strokeWidth: 1.4,
     },
@@ -115,6 +117,7 @@ function layout(graph: FlowGraph, selectedId: string | null): { nodes: Node<Node
 }
 
 export default function FlowPanel({ state, onHighlight }: Props) {
+  const theme = useTheme();
   const [selected, setSelected] = useState<string | null>(null);
   const flow = state.data?.flow ?? null;
   const laid = useMemo(() => (flow ? layout(flow, selected) : null), [flow, selected]);
@@ -162,7 +165,7 @@ export default function FlowPanel({ state, onHighlight }: Props) {
           nodesDraggable={false}
           elementsSelectable
           proOptions={{ hideAttribution: true }}
-          colorMode="dark"
+          colorMode={theme}
           onNodeClick={(_, n) => {
             const fn = (n.data as NodeData).node;
             setSelected(fn.id);

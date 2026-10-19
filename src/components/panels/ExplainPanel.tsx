@@ -73,7 +73,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
       <div>
         <div className="flex items-center gap-2">
           <KindIcon kind={s.kind} />
-          <h2 className="min-w-0 flex-1 break-all text-[1.067em] font-semibold text-white">{s.qualifiedName}</h2>
+          <h2 className="min-w-0 flex-1 break-all text-[1.067em] font-semibold text-slate-100">{s.qualifiedName}</h2>
           {onAsk && <button onMouseDown={(event) => event.preventDefault()} onClick={() => onAsk(selection?.id === s.id && selection.text.trim() ? { kind: "explanation", text: selection.text } : null)} className="shrink-0 rounded px-2 py-1.5 text-xs text-indigo-300 hover:bg-slate-800" title="选中讲解后可引用提问；未选中则提问当前方法">问 AI</button>}
           <CopyQuestionContext compact key={taskKey} detail={detail} backend={backend} explanation={cached} generating={loading} />
         </div>

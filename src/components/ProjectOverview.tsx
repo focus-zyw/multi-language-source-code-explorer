@@ -24,7 +24,7 @@ function EntryGroup({ group, onExplore }: { group: ProjectEntryGroup; onExplore:
               <span className="flex flex-wrap items-center gap-2">
                 <span className="min-w-0 break-all text-sm font-medium text-slate-100">{entry.label}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] ${entry.confidence === "heuristic" ? "bg-amber-500/10 text-amber-300" : "bg-sky-500/10 text-sky-300"}`}>{entry.confidence === "heuristic" ? "候选" : "约定识别"}</span>
-                <span className="ml-auto shrink-0 text-xs text-indigo-300 group-hover:text-white">探索调用 →</span>
+                <span className="ml-auto shrink-0 text-xs text-indigo-300 group-hover:text-slate-100">探索调用 →</span>
               </span>
               <span className="mt-1 block break-all text-xs text-slate-400">{entry.symbol.filePath}:L{entry.symbol.line} · {entry.symbol.name}</span>
               <span className="mt-1 block text-xs leading-5 text-slate-500">{entry.reason}</span>
@@ -55,7 +55,7 @@ export function ProjectOverview({ projectId, projectName, onExplore }: Props) {
       <div className="mx-auto max-w-4xl px-6 py-6">
         <div className="rounded-xl border border-indigo-500/50 bg-indigo-500/10 px-5 py-4">
           <span className="text-[11px] text-indigo-300">项目总起点 · 虚拟导航节点</span>
-          <h2 className="mt-1 break-all text-lg font-semibold text-white">{projectName}</h2>
+          <h2 className="mt-1 break-all text-lg font-semibold text-slate-100">{projectName}</h2>
           <p className="mt-2 text-xs leading-5 text-slate-400">按入口类型选择一条路径，再进入方法调用树。下方虚线表示导航归属，不表示程序执行顺序或方法调用。</p>
           {state.data && <p className="mt-2 text-xs text-slate-400">识别到 {state.data.entryCount} 个入口 / 候选 · {state.data.groups.length} 个分组 · 点击方法继续探索</p>}
         </div>

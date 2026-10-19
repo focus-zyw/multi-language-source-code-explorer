@@ -154,7 +154,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
         <button
           id={`sym-${s.id}`}
           onClick={() => onSelect(s.id)}
-          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25 text-white" : "text-slate-300"}`}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] hover:bg-slate-800 ${selectedId === s.id ? "bg-indigo-500/25 text-slate-100" : "text-slate-300"}`}
           title={s.qualifiedName}
         >
           <KindIcon kind={s.kind} />

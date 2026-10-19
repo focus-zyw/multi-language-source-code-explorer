@@ -13,7 +13,7 @@ export function ImportReport({ project, onClose }: { project: ProjectInfo; onClo
       <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">导入报告 · {project.name}</h2>
+            <h2 className="text-lg font-semibold text-slate-100">导入报告 · {project.name}</h2>
             <p className="mt-1 text-xs text-slate-400">
               {project.fileCount} 个源码文件 · {project.symbolCount} 个符号 · {(project.totalBytes / 1024).toFixed(0)} KB ·{" "}
               {Object.entries(project.languages)

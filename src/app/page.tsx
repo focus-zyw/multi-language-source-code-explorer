@@ -4,6 +4,7 @@ import { ImportPanel } from "@/components/ImportPanel";
 import { ProjectList } from "@/components/ProjectList";
 import { RESOLUTION_LABELS, type ResolutionT } from "@/lib/shared";
 import { ConfidenceBadge } from "@/components/Badges";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,12 @@ export default async function HomePage() {
             本机静态分析，每一处关系都标注可信度。
           </p>
         </div>
-        <div
+        <div className="flex flex-wrap items-center gap-3"><ThemeToggle /><div
           className={`rounded-full px-3 py-1.5 text-xs ring-1 ring-inset ${ai.configured ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/40" : "bg-slate-800 text-slate-400 ring-slate-700"}`}
           title="模型密钥只在服务端环境变量中读取，不会发送到浏览器"
         >
           {ai.configured ? `AI 讲解已启用 · ${ai.model ?? "可选来源"}` : "AI 讲解未配置 · 使用静态摘要"}
-        </div>
+        </div></div>
       </header>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
