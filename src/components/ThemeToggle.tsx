@@ -1,20 +1,14 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { ThemePreference } from "@/lib/theme-preference";
 
-const KEY = "code-atlas:theme:v1";
 export type Theme = "light" | "dark";
 
 function subscribe(onChange: () => void) {
   const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === KEY || event.key === null) {
-      document.documentElement.dataset.theme = event.newValue === "dark" ? "dark" : "light";
-    }
-  };
-  window.addEventListener("storage", onStorage);
-  return () => { observer.disconnect(); window.removeEventListener("storage", onStorage); };
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-theme-preference"] });
+  return () => observer.disconnect();
 }
 
 export function useTheme(): Theme {
@@ -22,15 +16,16 @@ export function useTheme(): Theme {
 }
 
 export function ThemeToggle() {
-  const theme = useTheme();
+  const preference = useSyncExternalStore(subscribe, (): ThemePreference => {
+    const value = document.documentElement.dataset.themePreference;
+    return value === "light" || value === "dark" ? value : "system";
+  }, () => "system");
   return <label className="inline-flex shrink-0 items-center gap-2 text-xs text-slate-400">
     <span>主题</span>
-    <select aria-label="界面主题" value={theme} onChange={(event) => {
-      const next = event.target.value === "dark" ? "dark" : "light";
-      document.documentElement.dataset.theme = next;
-      try { localStorage.setItem(KEY, next); } catch { /* Theme still works when storage is unavailable. */ }
+    <select aria-label="界面主题" value={preference} onChange={(event) => {
+      window.dispatchEvent(new CustomEvent("atlas:theme-preference", { detail: event.target.value }));
     }} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-200">
-      <option value="light">浅色</option><option value="dark">深色</option>
+      <option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option>
     </select>
   </label>;
 }

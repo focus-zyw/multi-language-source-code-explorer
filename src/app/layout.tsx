@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { ExplanationTasks } from "@/components/ExplanationTasks";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme-preference";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,8 +11,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: `try{document.documentElement.dataset.theme=localStorage.getItem("code-atlas:theme:v1")==="dark"?"dark":"light"}catch{}` }} /></head>
+    <html lang="zh-CN" data-theme="light" data-theme-preference="system" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} /></head>
       <body className="antialiased">{children}<ExplanationTasks /></body>
     </html>
   );
