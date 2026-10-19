@@ -22,15 +22,17 @@ export function ProjectList({ projects }: { projects: ProjectListItem[] }) {
 
   if (!projects.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center text-sm text-slate-500">
-        还没有项目。通过本地路径、文件夹或 ZIP 导入源码开始学习。
+      <div className="atlas-empty text-sm text-slate-400">
+        <span className="atlas-mark" aria-hidden="true">&lt;/&gt;</span>
+        <p className="text-base text-slate-200">你的源码探索，从这里开始</p>
+        <p className="max-w-xs leading-6">通过左侧本地路径、文件夹或 ZIP 导入项目，建立自己的源码地图。</p>
       </div>
     );
   }
   return (
     <ul className="space-y-3">
       {projects.map((p) => (
-        <li key={p.id} className="group rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition hover:border-indigo-500/50">
+        <li key={p.id} className="atlas-surface atlas-project group">
           <div className="flex items-start justify-between gap-3">
             <Link href={`/p/${p.id}`} className="min-w-0 flex-1">
               <h3 className="truncate text-base font-semibold text-slate-100 group-hover:text-indigo-300">{p.name}</h3>

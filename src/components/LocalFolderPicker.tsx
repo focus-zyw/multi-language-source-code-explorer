@@ -96,7 +96,7 @@ export function LocalFolderPicker({ initial, onChoose, onClose }: { initial: Loc
         <p className="mb-3 break-all font-mono text-xs text-slate-400">将选择：{chosen}</p>
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">取消</button>
-          <button type="button" disabled={busy} onClick={() => onChoose(chosen)} className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:opacity-50">选择此文件夹</button>
+          <button type="button" disabled={busy} onClick={() => onChoose(chosen)} className="atlas-primary px-4 py-2 text-sm">选择此文件夹</button>
         </div>
       </footer>
     </div>

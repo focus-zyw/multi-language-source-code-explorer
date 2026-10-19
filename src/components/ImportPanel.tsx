@@ -207,18 +207,18 @@ export function ImportPanel() {
   const skippedEntries = picked?.kind === "folder" ? Object.entries(picked.skipped).filter(([, v]) => v > 0) : [];
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl">
+    <div className="atlas-surface p-5 sm:p-6">
       <h2 className="text-base font-semibold text-slate-100">导入源码项目</h2>
       <p className="mt-1 text-xs leading-5 text-slate-400">
         支持 {Object.values(LANGUAGE_LABELS).join(" / ")}。仅做静态语法解析，<b className="text-slate-200">不会执行</b>项目中的任何代码；
         node_modules、.git、二进制与超大文件会被自动跳过。
       </p>
 
-      <div className="mt-4 flex gap-2" role="group" aria-label="导入方式">
+      <div className="atlas-segmented mt-5" role="group" aria-label="导入方式">
         <button type="button" disabled={!!busy} aria-pressed={mode === "local"} onClick={() => { setMode("local"); setError(null); }}
-          className={`rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-indigo-400 disabled:opacity-50 ${mode === "local" ? "bg-indigo-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>本地路径</button>
+          className="font-medium disabled:opacity-50">本地路径</button>
         <button type="button" disabled={!!busy} aria-pressed={mode === "upload"} onClick={() => { setMode("upload"); setError(null); }}
-          className={`rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-indigo-400 disabled:opacity-50 ${mode === "upload" ? "bg-indigo-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>上传文件夹 / ZIP</button>
+          className="font-medium disabled:opacity-50">上传文件夹 / ZIP</button>
       </div>
 
       {mode === "local" && <div className="mt-4 space-y-3 rounded-xl bg-slate-950/40 p-4">
@@ -251,7 +251,7 @@ export function ImportPanel() {
             <input id="local-project-name" value={name} disabled={!!busy} maxLength={120} placeholder={localPreview.name}
               onChange={(event) => setName(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-indigo-400 focus-visible:outline-2 focus-visible:outline-indigo-400" />
             <button type="button" onClick={() => localAction("import")} disabled={!!busy}
-              className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50">导入本地项目并分析</button>
+          className="atlas-primary w-full px-4 py-2.5 text-sm">导入本地项目并分析</button>
           </> : <p className="text-sm text-amber-200">未找到可分析的源码，请更换项目目录后重新预览。</p>}
         </div>}
       </div>}
@@ -272,7 +272,7 @@ export function ImportPanel() {
             type="button"
             disabled={!!busy}
             onClick={() => folderRef.current?.click()}
-            className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+            className="atlas-primary px-4 py-2 text-sm"
           >
             选择文件夹
           </button>
@@ -338,7 +338,7 @@ export function ImportPanel() {
             type="button"
             onClick={submit}
             disabled={!!busy || (picked.kind === "folder" && picked.items.length === 0)}
-            className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50"
+            className="atlas-primary w-full px-4 py-2.5 text-sm"
           >
             开始导入并分析
           </button>

@@ -13,14 +13,14 @@ export default async function HomePage() {
   const levels: ResolutionT[] = ["exact", "inferred", "heuristic", "external", "unresolved"];
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <main className="atlas-home mx-auto min-h-screen px-4 py-8 sm:px-8 sm:py-12">
+      <header className="atlas-home-header flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-indigo-300">Code Atlas</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">源码学习台</h1>
+          <p className="atlas-wordmark"><span className="atlas-mark" aria-hidden="true">&lt;/&gt;</span>CODE ATLAS <span className="tracking-normal text-slate-500">/ 本地源码工作台</span></p>
+          <h1 className="atlas-heading mt-6 text-4xl text-slate-100 sm:text-5xl">让源码，变得清晰。</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            导入本地源码 → 浏览函数/方法 → 阅读源码与讲解 → 查看关联测试 → 点击引用跳转 → 流程图与关键变量。
-            所有关系都标注可信度，猜测不会被伪装成事实。
+            从一个方法开始，读源码、追踪调用、探索流程，再向 AI 追问。
+            本机静态分析，每一处关系都标注可信度。
           </p>
         </div>
         <div
@@ -31,15 +31,15 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <ImportPanel />
         <section>
-          <h2 className="mb-3 text-base font-semibold text-slate-100">我的项目</h2>
+          <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold text-slate-100">我的项目</h2><span className="text-xs tabular-nums text-slate-500">{projects.length} 个项目</span></div>
           <ProjectList projects={projects} />
         </section>
       </div>
 
-      <section className="mt-10 rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+      <section className="atlas-trust mt-10">
         <h2 className="text-sm font-semibold text-slate-200">引用可信度说明</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {levels.map((l) => (

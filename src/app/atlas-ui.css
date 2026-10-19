@@ -1,0 +1,18 @@
+/* Curated CDS surface/interaction patterns; see THIRD_PARTY_NOTICES.md. */
+  .atlas-home { max-width: 1240px; }
+  .atlas-home-header { padding-bottom: 2rem; border-bottom: 1px solid var(--atlas-border); }
+  .atlas-wordmark { display: flex; align-items: center; gap: .75rem; color: var(--atlas-muted); font-size: .75rem; letter-spacing: .16em; }
+  .atlas-mark { display: grid; place-items: center; width: 2rem; height: 2rem; border: 1px solid var(--atlas-border); border-radius: .6rem; color: var(--atlas-clay); font: 600 .8rem var(--font-mono); letter-spacing: -.08em; }
+  .atlas-heading { font-family: var(--font-serif); font-weight: 400; line-height: 1.3; letter-spacing: -.03em; }
+  .atlas-surface { border: 1px solid var(--atlas-border); border-radius: 1rem; background: var(--atlas-surface); box-shadow: var(--atlas-shadow); }
+  .atlas-project { position: relative; padding: 1.25rem; }
+  .atlas-project:hover, .atlas-project:focus-within { border-color: var(--atlas-clay); }
+  .atlas-empty { display: flex; min-height: 240px; flex-direction: column; align-items: center; justify-content: center; gap: .75rem; border: 1px dashed var(--atlas-border); border-radius: 1rem; background: var(--atlas-sidebar); padding: 2rem; text-align: center; }
+  .atlas-segmented { display: flex; gap: .25rem; padding: .25rem; border: 1px solid var(--atlas-border); border-radius: .65rem; background: var(--atlas-canvas); }
+  .atlas-segmented > button { border-radius: .4rem; padding: .5rem .75rem; background: transparent; color: var(--atlas-muted); font-size: .8125rem; }
+  .atlas-segmented > button[aria-pressed="true"] { background: var(--atlas-elevated); color: var(--atlas-text); box-shadow: 0 1px 3px rgb(0 0 0 / 20%); }
+  .atlas-segmented > button:hover:not(:disabled) { color: var(--atlas-text); }
+  .atlas-primary { border: 1px solid transparent; border-radius: .6rem; background: var(--atlas-clay); color: #181412; font-weight: 600; }
+  .atlas-primary:hover:not(:disabled) { background: var(--atlas-clay-hover); }
+  .atlas-primary:disabled { background: var(--atlas-elevated); color: var(--atlas-muted); cursor: not-allowed; opacity: .6; }
+  .atlas-trust { border-top: 1px solid var(--atlas-border); padding-top: 1.5rem; }
