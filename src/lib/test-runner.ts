@@ -4,10 +4,13 @@ import { lstat, readFile, realpath, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ImportError } from "./ingest/rules.ts";
-import type { CoverageFile, TestRunnerProfile, TestRunResult, RunnerKind } from "./test-run-types.ts";
+import type { CoverageFile, TestRunnerProfile, TestRunResult, RunnerKind, TraceCall, TestRunTrace } from "./test-run-types.ts";
 
 interface Profile extends TestRunnerProfile { kind: RunnerKind; executable: string; args: string[] }
 interface Slot { root: string; result: TestRunResult; controller: AbortController }
+/** 追踪目标：项目内的相对文件路径 + 函数名。只有 pytest 支持。 */
+export interface TraceTarget { file: string; func: string }
+const TRACE_MAX_NODES = 300;
 const shared = globalThis as typeof globalThis & { __atlasTestRuns?: Map<number, Slot> };
 const runs = shared.__atlasTestRuns ??= new Map<number, Slot>();
 export const hashSource = (source: string) => createHash("sha256").update(source).digest("hex");
@@ -113,16 +116,59 @@ export function cancelRun(projectId: number, runId: string): void {
   slot.controller.abort();
 }
 
-function childEnvironment(): NodeJS.ProcessEnv {
+function childEnvironment(extra?: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { NODE_ENV: "test", CI: "1", NO_COLOR: "1", PYTHONDONTWRITEBYTECODE: "1" };
   for (const key of ["PATH", "Path", "PATHEXT", "SystemRoot", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA"]) if (process.env[key]) env[key] = process.env[key];
-  return env;
+  return extra ? { ...env, ...extra } : env;
 }
 
-export async function startRun(projectId: number, root: string, profile: Profile, coverage: boolean, sources: { path: string; content: string }[], timeoutMs = 120_000): Promise<TestRunResult> {
+/** 插件随仓库分发，运行时按工作目录定位；不参与打包。 */
+function pluginDirectory(): string {
+  return path.join(process.cwd(), "resources", "pytest");
+}
+
+function parseTraceCall(value: unknown): TraceCall | null {
+  if (!value || typeof value !== "object") return null;
+  const node = value as Record<string, unknown>;
+  if (typeof node.func !== "string") return null;
+  return {
+    id: typeof node.id === "number" ? node.id : 0,
+    func: node.func,
+    args: Array.isArray(node.args)
+      ? node.args.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const arg = item as Record<string, unknown>;
+          return typeof arg.name === "string" && typeof arg.value === "string" ? [{ name: arg.name, value: arg.value }] : [];
+        })
+      : [],
+    ret: typeof node.ret === "string" ? node.ret : null,
+    line: typeof node.line === "number" ? node.line : 0,
+    depth: typeof node.depth === "number" ? node.depth : 0,
+    children: Array.isArray(node.children) ? node.children.flatMap((child) => { const parsed = parseTraceCall(child); return parsed ? [parsed] : []; }) : [],
+  };
+}
+
+function parseTrace(raw: string, target: TraceTarget): TestRunTrace {
+  const data = JSON.parse(raw) as Record<string, unknown>;
+  const roots = Array.isArray(data.roots) ? data.roots.flatMap((root) => { const parsed = parseTraceCall(root); return parsed ? [parsed] : []; }) : [];
+  const calls = typeof data.calls === "number" ? data.calls : roots.length;
+  return {
+    target,
+    calls,
+    nodeCount: typeof data.nodeCount === "number" ? data.nodeCount : roots.length,
+    truncated: data.truncated === true,
+    roots,
+    note: calls === 0
+      ? "本次测试运行没有调用到该方法：可能是测试未覆盖，或符号名与运行时函数名不一致。"
+      : data.truncated === true ? `记录已达 ${TRACE_MAX_NODES} 条上限，后面的调用被省略。` : "",
+  };
+}
+
+export async function startRun(projectId: number, root: string, profile: Profile, coverage: boolean, sources: { path: string; content: string }[], timeoutMs = 120_000, trace?: TraceTarget): Promise<TestRunResult> {
   if ([...runs.values()].some((s) => s.result.status === "running" && (s.root === root || runs.get(projectId) === s))) throw new ImportError("该项目目录已有测试正在运行", 409);
   if ([...runs.values()].filter((s) => s.result.status === "running").length >= 2) throw new ImportError("最多同时运行两个项目的测试", 429);
   if (coverage && !profile.coverage) throw new ImportError("此 runner 暂不支持行覆盖率", 400);
+  if (trace && profile.kind !== "pytest") throw new ImportError("调用追踪目前只支持 pytest", 400);
   const controller = new AbortController();
   const result: TestRunResult = { id: randomUUID(), status: "running", command: profile.command, startedAt: Date.now(), exitCode: null, output: "", truncated: false, coverage: [], coverageNote: coverage ? "正在收集本次运行的覆盖率" : "本次未收集覆盖率" };
   // Reserve before asynchronous filesystem work to prevent double-starts.
@@ -139,6 +185,11 @@ export async function startRun(projectId: number, root: string, profile: Profile
       const args = [...profile.args];
       if (profile.kind === "vitest" && !args.includes("run")) args.push("--run");
       if (profile.kind === "jest") args.push("--watch=false", "--runInBand");
+      if (trace) args.push("-p", "atlas_trace_plugin");
+      const traceOut = trace ? path.join(temp, "trace.json") : undefined;
+      const traceEnv = trace && traceOut
+        ? { PYTHONPATH: [pluginDirectory(), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter), ATLAS_TRACE_FILE: trace.file, ATLAS_TRACE_FUNC: trace.func, ATLAS_TRACE_OUT: traceOut, ATLAS_TRACE_MAX_NODES: String(TRACE_MAX_NODES) }
+        : undefined;
       if (coverage) {
         if (profile.kind === "vitest") args.push("--coverage", "--coverage.reporter=lcov", `--coverage.reportsDirectory=${temp}`);
         if (profile.kind === "jest") args.push("--coverage", "--coverageReporters=lcov", `--coverageDirectory=${temp}`);
@@ -151,7 +202,7 @@ export async function startRun(projectId: number, root: string, profile: Profile
       }
       if (controller.signal.aborted) { outcome = "cancelled"; return; }
       outcome = await new Promise<TestRunResult["status"]>((resolve) => {
-        const child = spawn(profile.executable, args, { cwd: root, env: childEnvironment(), shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+        const child = spawn(profile.executable, args, { cwd: root, env: childEnvironment(traceEnv), shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
         let reason: "cancelled" | "timed-out" | undefined;
         let launchFailed = false;
         const stop = (why: "cancelled" | "timed-out") => {
@@ -196,6 +247,13 @@ export async function startRun(projectId: number, root: string, profile: Profile
           result.coverageNote = `本次测试集合的行覆盖率；不代表单个测试的覆盖或调用顺序。${omitted ? ` ${omitted} 个文件因未导入、源码变化或路径限制未映射，请重新扫描后再运行。` : ""}`;
           if (!mapped.length) result.coverageNote += " 没有可映射到已导入源码的覆盖数据。";
         } catch { result.coverageNote = "未生成有效 LCOV 报告；请检查 runner 的覆盖率支持与已有依赖，应用不会自动安装。"; }
+      }
+      if (trace && traceOut && !controller.signal.aborted) {
+        try {
+          result.trace = parseTrace(await readFile(traceOut, "utf8"), trace);
+        } catch {
+          result.trace = { target: trace, calls: 0, nodeCount: 0, truncated: false, roots: [], note: "测试进程没有产出追踪结果：可能测试在收集阶段就失败了，或 pytest 插件未能加载。" };
+        }
       }
     } finally {
       if (temp) await rm(temp, { recursive: true, force: true });

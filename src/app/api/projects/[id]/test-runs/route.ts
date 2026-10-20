@@ -4,7 +4,7 @@ import { files, symbols } from "@/db/schema";
 import { getProject, parseId } from "@/lib/queries";
 import { checkLocalRequest, readLocalBody } from "@/lib/ingest/local-request";
 import { ImportError } from "@/lib/ingest/rules";
-import { cancelRun, discoverRunners, hashSource, latestRun, projectRoot, safeFile, startRun } from "@/lib/test-runner";
+import { cancelRun, discoverRunners, hashSource, latestRun, projectRoot, safeFile, startRun, type TraceTarget } from "@/lib/test-runner";
 import type { TestRunState } from "@/lib/test-run-types";
 
 export const runtime = "nodejs";
@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const { id, project } = await context(req, params);
     if (process.env.CODE_ATLAS_TEST_EXECUTION !== "true") return Response.json({ enabled: false, reason: "测试执行默认关闭。在应用的 .env.local 中设置 CODE_ATLAS_TEST_EXECUTION=true 并重启后可启用。", profiles: [], run: null } satisfies TestRunState);
     const root = await projectRoot(project.sourcePath!);
-    const profiles = (await discoverRunners(root)).map(({ id, label, command, coverage }) => ({ id, label, command, coverage }));
+    const profiles = (await discoverRunners(root)).map(({ id, label, command, coverage, kind }) => ({ id, label, command, coverage, kind }));
     const run = latestRun(id);
     // Return coverage only for the requested symbol's file, after checking ownership and both source copies.
     const sid = parseId(new URL(req.url).searchParams.get("symbolId") ?? "");
@@ -52,11 +52,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (process.env.CODE_ATLAS_TEST_EXECUTION !== "true") throw new ImportError("本机尚未启用测试执行", 403);
     if (body.action === "stop" && typeof body.runId === "string") { cancelRun(id, body.runId); return Response.json({ ok: true }); }
     if (body.action !== "run" || body.confirmExecution !== true || typeof body.coverage !== "boolean") throw new ImportError("请明确确认执行本地项目代码");
+    if (body.trace !== undefined && typeof body.trace !== "boolean") throw new ImportError("trace 必须为布尔值");
     const root = await projectRoot(project.sourcePath!);
     const profile = (await discoverRunners(root)).find((p) => p.id === body.profileId);
     if (!profile || profile.command !== body.command) throw new ImportError("测试配置发生变化，请刷新配置后重试", 409);
+    let trace: TraceTarget | undefined;
+    if (body.trace === true) {
+      const sid = parseId(String(body.symbolId ?? ""));
+      if (!sid) throw new ImportError("追踪需要指定一个方法");
+      const [row] = await db.select({ name: symbols.name, path: files.path, language: files.language })
+        .from(symbols).innerJoin(files, eq(symbols.fileId, files.id))
+        .where(and(eq(symbols.id, sid), eq(symbols.projectId, id)));
+      if (!row) throw new ImportError("方法不属于该项目或已重新扫描", 404);
+      if (row.language !== "python") throw new ImportError("调用追踪目前只支持 Python 方法", 400);
+      trace = { file: row.path, func: row.name };
+    }
     const sources = body.coverage ? await db.select({ path: files.path, content: files.content }).from(files).where(eq(files.projectId, id)) : [];
-    const result = await startRun(id, root, profile, body.coverage, sources);
+    const result = await startRun(id, root, profile, body.coverage, sources, undefined, trace);
     return Response.json({ id: result.id }, { status: 202 });
   } catch (error) { return failure(error); }
 }

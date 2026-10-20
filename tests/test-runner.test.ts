@@ -92,3 +92,45 @@ test("coverage is from fresh temporary report and maps only unchanged imported s
     assert.match(next.coverageNote, /未生成有效/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("trace run injects the pytest plugin env and parses recorded calls", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "atlas-trace-"));
+  const report = JSON.stringify({
+    target: { file: "mylib.py", func: "add" }, calls: 2, nodeCount: 3, truncated: false,
+    roots: [
+      { id: 1, func: "add", args: [{ name: "x", value: "1" }], ret: "1", line: 5, depth: 0, children: [] },
+      { id: 2, func: "add", args: [{ name: "x", value: "2" }], ret: "2", line: 5, depth: 0, children: [
+        { id: 3, func: "add", args: [{ name: "x", value: "3" }], ret: null, line: 6, depth: 1, children: [] },
+      ] },
+    ],
+  });
+  try {
+    // 假 runner：校验注入的环境变量，然后按插件格式写结果。
+    await writeFile(path.join(root, "fake.mjs"), [
+      "import { writeFileSync } from 'node:fs';",
+      "const out = process.env.ATLAS_TRACE_OUT;",
+      "const pp = process.env.PYTHONPATH || '';",
+      "if (!out || !pp.includes('pytest') || process.env.ATLAS_TRACE_FILE !== 'mylib.py' || process.env.ATLAS_TRACE_FUNC !== 'add') {",
+      "  console.error('trace env not injected: ' + pp); process.exit(3);",
+      "}",
+      "writeFileSync(out, " + JSON.stringify(report) + ");",
+    ].join("\n"));
+    const profile = { id: "pytest", label: "pytest", command: "python -m pytest", coverage: false, kind: "pytest" as const, executable: process.execPath, args: [path.join(root, "fake.mjs")] };
+
+    const run = await finish(await startRun(7201, root, profile, false, [], 60_000, { file: "mylib.py", func: "add" }));
+    assert.equal(run.status, "passed");
+    assert.match(run.command, /-p atlas_trace_plugin/);
+    assert.equal(run.trace?.calls, 2);
+    assert.equal(run.trace?.target.func, "add");
+    assert.equal(run.trace?.roots[0].args[0].value, "1");
+    assert.equal(run.trace?.roots[1].children[0].depth, 1);
+
+    // 插件没写出结果时，给出可解释的说明而不是空对象。
+    await writeFile(path.join(root, "fake.mjs"), "process.exit(0);");
+    const missing = await finish(await startRun(7201, root, profile, false, [], 60_000, { file: "mylib.py", func: "add" }));
+    assert.equal(missing.trace?.calls, 0);
+    assert.match(missing.trace?.note ?? "", /没有产出追踪结果/);
+
+    await assert.rejects(startRun(7202, root, { ...profile, kind: "node" }, false, [], 60_000, { file: "mylib.py", func: "add" }), /只支持 pytest/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

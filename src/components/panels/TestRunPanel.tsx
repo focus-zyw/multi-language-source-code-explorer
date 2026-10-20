@@ -2,14 +2,30 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { SymbolDetail } from "@/lib/api-types";
-import type { TestRunState } from "@/lib/test-run-types";
+import type { TestRunState, TraceCall } from "@/lib/test-run-types";
 
 const STATUS = { running: "运行中", passed: "运行成功", failed: "运行失败", cancelled: "已停止", "timed-out": "已超时", error: "启动或运行异常" };
+
+function short(value: string, limit = 44): string {
+  return value.length > limit ? `${value.slice(0, limit)}…` : value;
+}
+
+function TraceNode({ call, depth }: { call: TraceCall; depth: number }) {
+  return <li className="text-xs">
+    <div className="break-all text-slate-300" style={{ paddingLeft: depth * 12 }}>
+      <span className="text-slate-100">{call.func}</span>({call.args.map((a) => `${a.name}=${short(a.value)}`).join(", ")})
+      {call.ret !== null && <span className="text-slate-400"> → {short(call.ret, 32)}</span>}
+      <span className="text-slate-500"> · L{call.line}</span>
+    </div>
+    {call.children.length > 0 && <ul>{call.children.map((child) => <TraceNode key={child.id} call={child} depth={depth + 1} />)}</ul>}
+  </li>;
+}
 
 export function TestRunPanel({ projectId, detail }: { projectId: number; detail: SymbolDetail }) {
   const [state, setState] = useState<TestRunState | null>(null);
   const [profileId, setProfileId] = useState("");
   const [coverage, setCoverage] = useState(false);
+  const [trace, setTrace] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +63,7 @@ export function TestRunPanel({ projectId, detail }: { projectId: number; detail:
   async function act(action: "run" | "stop") {
     setBusy(true); setError("");
     try {
-      const reply = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(action === "stop" ? { action, runId: run?.id } : { action, profileId: selected?.id, command: selected?.command, coverage: coverage && selected?.coverage, confirmExecution: confirmed }) });
+      const reply = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(action === "stop" ? { action, runId: run?.id } : { action, profileId: selected?.id, command: selected?.command, coverage: coverage && selected?.coverage, trace: trace && selected?.kind === "pytest", symbolId: detail.symbol.id, confirmExecution: confirmed }) });
       const body = await reply.json();
       if (!reply.ok) throw new Error(body.error ?? "测试操作失败");
       if (action === "run") setConfirmed(false);
@@ -69,6 +85,7 @@ export function TestRunPanel({ projectId, detail }: { projectId: number; detail:
       </label>
       <pre className="overflow-auto whitespace-pre-wrap break-all text-xs text-slate-400">{selected?.command}</pre>
       <label className="flex items-start gap-2 text-xs leading-5 text-slate-400"><input className="mt-1" type="checkbox" checked={coverage && !!selected?.coverage} disabled={!selected?.coverage || busy || running} onChange={(e) => setCoverage(e.target.checked)} />收集本次行覆盖率（需要 runner 已有覆盖率依赖；Node runner 暂不支持）</label>
+      <label className="flex items-start gap-2 text-xs leading-5 text-slate-400"><input className="mt-1" type="checkbox" checked={trace && selected?.kind === "pytest"} disabled={selected?.kind !== "pytest" || busy || running} onChange={(e) => setTrace(e.target.checked)} />记录当前方法在测试中的每次调用（仅 pytest；记录接收者与参数，测试会慢约 3 倍）</label>
       <label className="flex items-start gap-2 text-xs leading-5 text-slate-400"><input className="mt-1" type="checkbox" checked={confirmed} disabled={busy || running} onChange={(e) => setConfirmed(e.target.checked)} />我信任该项目及其测试配置，确认执行本地代码</label>
       <div className="flex gap-2">
         <button className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-100 disabled:opacity-40" disabled={busy || running || !confirmed} onClick={() => void act("run")}>运行项目测试</button>
@@ -86,6 +103,14 @@ export function TestRunPanel({ projectId, detail }: { projectId: number; detail:
         {lines.length > 500 && <p className="text-xs text-slate-400">仅展示前 500 行，统计包含全部报告行。</p>}
       </details>}
       {!running && !lines.length && <p className="text-xs text-slate-400">当前方法没有可匹配的覆盖率数据：可能未采集、未包含此文件，或磁盘源码与导入版本已变化。这不表示覆盖率为 0。</p>}
+      {run.trace && <details open>
+        <summary className="cursor-pointer text-xs text-slate-100">调用记录：{run.trace.target.func} 在本次测试中被调用 {run.trace.calls} 次{run.trace.truncated ? "（已截断）" : ""}</summary>
+        {run.trace.note && <p className="mt-1 text-xs leading-5 text-slate-400">{run.trace.note}</p>}
+        {!!run.trace.roots.length && <ul aria-label="调用记录" className="mt-2 max-h-64 overflow-auto rounded bg-slate-900 p-2">
+          {run.trace.roots.slice(0, 120).map((call) => <TraceNode key={call.id} call={call} depth={0} />)}
+        </ul>}
+        {run.trace.roots.length > 120 && <p className="text-xs text-slate-400">仅展示前 120 条，统计包含全部记录。</p>}
+      </details>}
     </div>}
   </section>;
 }
