@@ -4,8 +4,10 @@ import { useMemo } from "react";
 import type { SymbolDetail, TestLinkView } from "@/lib/api-types";
 import type { ResolutionT } from "@/lib/shared";
 import { KindIcon, TestConfidenceBadge } from "../Badges";
+import { TestRunPanel } from "./TestRunPanel";
 
 interface Props {
+  projectId: number;
   detail: SymbolDetail;
   onNavigate: (id: number, note?: { text: string; level: ResolutionT }) => void;
 }
@@ -23,13 +25,14 @@ const GROUPS: { key: TestLinkView["confidence"]; title: string; desc: string }[]
   { key: "heuristic", title: "猜测：命名或同名候选", desc: "未验证，可能是误判" },
 ];
 
-export function TestsPanel({ detail, onNavigate }: Props) {
+export function TestsPanel({ projectId, detail, onNavigate }: Props) {
   const isTest = detail.symbol.kind === "test";
   const groups = useMemo(() => GROUPS.map((g) => ({ ...g, items: detail.tests.filter((t) => t.confidence === g.key) })).filter((g) => g.items.length), [detail.tests]);
   const toLevel = (c: TestLinkView["confidence"]): ResolutionT => (c === "indirect" ? "inferred" : c);
 
   return (
     <div className="p-4">
+      <TestRunPanel key={`${projectId}:${detail.symbol.id}`} projectId={projectId} detail={detail} />
       <p className="mb-3 text-xs leading-5 text-slate-400">
         {isTest
           ? "这个测试用例静态可见的“被测对象”如下（沿调用链解析得到，并非运行时覆盖率）。"

@@ -1,0 +1,62 @@
+import { eq, and } from "drizzle-orm";
+import { db } from "@/db";
+import { files, symbols } from "@/db/schema";
+import { getProject, parseId } from "@/lib/queries";
+import { checkLocalRequest, readLocalBody } from "@/lib/ingest/local-request";
+import { ImportError } from "@/lib/ingest/rules";
+import { cancelRun, discoverRunners, hashSource, latestRun, projectRoot, safeFile, startRun } from "@/lib/test-runner";
+import type { TestRunState } from "@/lib/test-run-types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+async function context(req: Request, params: Promise<{ id: string }>) {
+  checkLocalRequest(req);
+  const id = parseId((await params).id);
+  if (!id) throw new ImportError("无效的项目 ID");
+  const project = await getProject(id);
+  if (!project) throw new ImportError("项目不存在", 404);
+  if (project.sourceType !== "local" || !project.sourcePath) throw new ImportError("仅本地目录项目支持测试执行；上传项目仍只做静态分析", 409);
+  return { id, project };
+}
+
+function failure(error: unknown) {
+  return Response.json({ error: error instanceof ImportError ? error.message : "测试服务暂不可用，请检查本机项目环境" }, { status: error instanceof ImportError ? error.status : 500 });
+}
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id, project } = await context(req, params);
+    if (process.env.CODE_ATLAS_TEST_EXECUTION !== "true") return Response.json({ enabled: false, reason: "测试执行默认关闭。在应用的 .env.local 中设置 CODE_ATLAS_TEST_EXECUTION=true 并重启后可启用。", profiles: [], run: null } satisfies TestRunState);
+    const root = await projectRoot(project.sourcePath!);
+    const profiles = (await discoverRunners(root)).map(({ id, label, command, coverage }) => ({ id, label, command, coverage }));
+    const run = latestRun(id);
+    // Return coverage only for the requested symbol's file, after checking ownership and both source copies.
+    const sid = parseId(new URL(req.url).searchParams.get("symbolId") ?? "");
+    let coverage = run?.coverage ?? [];
+    if (sid) {
+      const [row] = await db.select({ path: files.path, content: files.content }).from(symbols).innerJoin(files, eq(symbols.fileId, files.id)).where(and(eq(symbols.id, sid), eq(symbols.projectId, id)));
+      if (!row) throw new ImportError("方法不属于该项目或已重新扫描", 404);
+      let liveHash = "";
+      try { liveHash = hashSource(await safeFile(root, row.path)); } catch { /* Do not map unavailable files. */ }
+      coverage = coverage.filter((file) => file.path === row.path && file.sourceHash === hashSource(row.content) && file.sourceHash === liveHash);
+    } else coverage = [];
+    return Response.json({ enabled: true, profiles, reason: profiles.length ? "" : "未发现可直接运行的测试配置。支持简单的 package.json test/test:* 脚本（node --test、vitest、jest），以及含配置文件的 pytest。不会执行 shell 组合脚本或安装依赖。", run: run ? { ...run, coverage } : null } satisfies TestRunState);
+  } catch (error) { return failure(error); }
+}
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const body = await readLocalBody(req);
+    const { id, project } = await context(req, params);
+    if (process.env.CODE_ATLAS_TEST_EXECUTION !== "true") throw new ImportError("本机尚未启用测试执行", 403);
+    if (body.action === "stop" && typeof body.runId === "string") { cancelRun(id, body.runId); return Response.json({ ok: true }); }
+    if (body.action !== "run" || body.confirmExecution !== true || typeof body.coverage !== "boolean") throw new ImportError("请明确确认执行本地项目代码");
+    const root = await projectRoot(project.sourcePath!);
+    const profile = (await discoverRunners(root)).find((p) => p.id === body.profileId);
+    if (!profile || profile.command !== body.command) throw new ImportError("测试配置发生变化，请刷新配置后重试", 409);
+    const sources = body.coverage ? await db.select({ path: files.path, content: files.content }).from(files).where(eq(files.projectId, id)) : [];
+    const result = await startRun(id, root, profile, body.coverage, sources);
+    return Response.json({ id: result.id }, { status: 202 });
+  } catch (error) { return failure(error); }
+}

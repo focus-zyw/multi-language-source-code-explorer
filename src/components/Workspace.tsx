@@ -445,7 +445,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 ) : tab === "refs" ? (
                   <RefsPanel detail={shown} focusRefId={focus} onNavigate={navigate} onHighlight={onHighlight} />
                 ) : tab === "tests" ? (
-                  <TestsPanel detail={shown} onNavigate={navigate} />
+                  <TestsPanel projectId={project.id} detail={shown} onNavigate={navigate} />
                 ) : tab === "flow" ? (
                   <FlowPanel key={shown.symbol.id} state={analysisView} onHighlight={onHighlight} />
                 ) : (

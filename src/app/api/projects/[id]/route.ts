@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { getProject, parseId } from "@/lib/queries";
+import { stopProjectTests } from "@/lib/test-runner";
 
 export const dynamic = "force-dynamic";
 
@@ -19,5 +20,6 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const id = parseId((await params).id);
   if (!id) return Response.json({ error: "无效的项目 ID" }, { status: 400 });
   await db.delete(projects).where(eq(projects.id, id));
+  stopProjectTests(id);
   return Response.json({ ok: true });
 }
