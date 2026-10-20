@@ -40,6 +40,18 @@ test("disconnecting the stream or aborting the request aborts its underlying Age
   }
 });
 
+test("delta events reach the reader in order and JSON replies carry no deltas", async () => {
+  const deltas: string[] = [];
+  const stream = explanationStream(new AbortController().signal, undefined, async (_signal, progress, delta) => {
+    progress("running"); delta("第一段"); delta("第二段"); return result;
+  });
+  assert.deepEqual(await readExplanation(stream, (event) => { assert.equal(event.timeoutMs, undefined); }, (text) => deltas.push(text)), result);
+  assert.deepEqual(deltas, ["第一段", "第二段"]);
+  const fromJson: string[] = [];
+  assert.deepEqual(await readExplanation(Response.json(result), () => {}, (text) => fromJson.push(text)), result);
+  assert.deepEqual(fromJson, []);
+});
+
 test("cached JSON replies and nonstream API errors remain compatible", async () => {
   assert.deepEqual(await readExplanation(Response.json({ ...result, cached: true }), () => {}), { ...result, cached: true });
   await assert.rejects(readExplanation(Response.json({ error: "未配置" }, { status: 503 }), () => {}), /未配置/);

@@ -6,7 +6,8 @@ export interface ExplanationResponse extends ExplanationResult {
   durationMs?: number;
 }
 export type ExplanationEvent =
-  | { type: "progress"; phase: AgentPhase; elapsedMs: number; timeoutMs: number }
+  | { type: "progress"; phase: AgentPhase; elapsedMs: number; timeoutMs?: number }
+  | { type: "delta"; text: string }
   | { type: "result"; result: ExplanationResponse }
   | { type: "error"; error: string };
 

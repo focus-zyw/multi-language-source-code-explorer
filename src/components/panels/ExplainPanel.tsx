@@ -42,6 +42,8 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
   const [now, setNow] = useState(0);
   const loading = currentRequest?.loading ?? false;
   const error = currentRequest?.error ?? null;
+  // 生成中的部分正文优先于上一次缓存，避免重新生成时新旧内容混在一起。
+  const partial = loading ? currentRequest?.partial : undefined;
   useEffect(() => {
     if (!loading) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -58,6 +60,9 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
   };
   const stop = () => explanationTasks.stop(taskKey);
   const elapsedSeconds = currentRequest ? Math.max(0, Math.floor((now - currentRequest.startedAt) / 1000)) : 0;
+  const statusLabel = partial ? "正在接收讲解"
+    : backend === "agent" && currentRequest && currentRequest.phase !== "cancelled" ? PHASE_LABEL[currentRequest.phase]
+    : "正在等待模型返回讲解";
 
   const structural = (s.kind === "element" || s.kind === "property");
   const m = s.metrics;
@@ -145,7 +150,12 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
             ? "通过本机 Codex 生成讲解，使用已有 CLI 登录。本次只提供当前节点源码和静态分析事实。"
             : `通过模型 API 生成讲解${selected.model ? `（${selected.model}）` : ""}，密钥仅在服务端读取。`}
         </p>
-        {cached ? (
+        {partial ? (
+          <>
+            <Markdown text={partial} />
+            <p className="mt-2 text-xs text-slate-500">正在接收讲解，以下内容尚未完成；结束后会整体保存。</p>
+          </>
+        ) : cached ? (
           <>
             <Markdown text={cached.explanation} />
             {cached.relativeLines && <p className="mt-2 text-xs text-slate-500">讲解中的“{structural ? "片段" : "方法"}内行号”以当前{structural ? "节点" : "方法"}的第一行为第 1 行。</p>}
@@ -162,7 +172,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
         </button>}
         {loading && <button onClick={stop} className="ml-2 mt-3 min-h-11 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800">停止分析</button>}
         <div aria-live="polite">
-          {loading && <p className="mt-2 text-xs leading-5 text-slate-400">{backend === "agent" && currentRequest && currentRequest.phase !== "cancelled" ? PHASE_LABEL[currentRequest.phase] : "正在等待模型返回讲解"} · 已用时 {elapsedSeconds} 秒{currentRequest?.timeoutMs ? ` · 最长等待 ${Math.ceil(currentRequest.timeoutMs / 1000)} 秒` : ""}</p>}
+          {loading && <p className="mt-2 text-xs leading-5 text-slate-400">{statusLabel} · 已用时 {elapsedSeconds} 秒{currentRequest?.timeoutMs ? ` · 最长等待 ${Math.ceil(currentRequest.timeoutMs / 1000)} 秒` : ""}</p>}
           {loading && <p className="mt-2 text-xs leading-5 text-slate-400">可继续切换方法、页签或讲解来源，生成会在后台继续；点击“停止分析”可取消。刷新或关闭页面会中断尚未完成的任务。</p>}
           {loading && backend === "agent" && elapsedSeconds >= 30 && <p className="mt-2 text-xs leading-5 text-amber-200">耗时较长，模型速度和网络会影响等待时间。可继续浏览，完成后会自动保存。</p>}
           {currentRequest?.phase === "cancelled" && <p className="mt-2 text-xs text-slate-400">已取消本次讲解，可随时重新生成。</p>}

@@ -32,8 +32,11 @@ test("production app supports both explanation backends with independent persist
       held.started();
       return;
     }
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ choices: [{ message: { content: "## 一句话概述\nAPI 测试讲解：输入乘以二。" } }] }));
+    // The app always asks for SSE, so the fixture mirrors a provider that streams.
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.write('data: {"choices":[{"delta":{"content":"## 一句话概述\\nAPI 测试"}}]}\n\n');
+    res.write('data: {"choices":[{"delta":{"content":"讲解：输入乘以二。"}}]}\n\n');
+    res.end("data: [DONE]\n\n");
   });
   try {
     await new Promise((resolve) => api.listen(0, "127.0.0.1", resolve));
@@ -111,6 +114,14 @@ test("production app supports both explanation backends with independent persist
     assert.equal(events.at(-1).type, "result");
     assert.ok(events.at(-1).result.explanation.includes("Agent 测试讲解"));
     assert.equal(JSON.stringify(events).includes("private"), false);
+    // The model API backend streams deltas in the same envelope so the panel can render partial text.
+    const apiStream = await fetch(`${path}/explain`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ backend: "api", force: true, stream: true }) });
+    assert.match(apiStream.headers.get("content-type"), /application\/x-ndjson/);
+    const apiEvents = (await apiStream.text()).trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(apiEvents.filter((event) => event.type === "delta").map((event) => event.text).join(""), "## 一句话概述\nAPI 测试讲解：输入乘以二。");
+    assert.equal(apiEvents.at(-1).type, "result");
+    assert.ok(apiEvents.at(-1).result.explanation.includes("API 测试讲解"));
+    assert.equal(JSON.stringify(apiEvents).includes("local-fixture-only"), false);
 
     // A rescan replaces symbol IDs but retains explanations whose content fingerprint matches.
     const sourceDir = join(temp, "source");

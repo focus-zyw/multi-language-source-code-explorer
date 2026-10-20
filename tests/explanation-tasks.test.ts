@@ -100,11 +100,33 @@ test("progress continues without subscribers, then a remounted view can manually
   unmount();
 });
 
+test("streamed deltas surface as partial text and are cleared once the result arrives", async () => {
+  let streamController!: ReadableStreamDefaultController<Uint8Array>;
+  const bodies: unknown[] = [];
+  const store = createExplanationTasks(async (_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    return new Response(new ReadableStream({ start(controller) { streamController = controller; } }), { headers: { "content-type": "application/x-ndjson" } });
+  });
+  const pending = store.start(input);
+  await Promise.resolve();
+  assert.deepEqual(bodies[0], { force: false, backend: "agent", stream: true });
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "delta", text: "前半" }) + "\n"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.get(key)?.partial, "前半");
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "delta", text: "后半" }) + "\n"));
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "result", result }) + "\n"));
+  streamController.close();
+  await pending;
+  assert.equal(store.get(key)?.partial, undefined);
+  assert.deepEqual(store.get(key)?.result, result);
+});
+
 test("API tasks also stop explicitly; dismissing a running task cannot remove its stop control", async () => {
   const { store, requests } = harness();
   const apiKey = explanationTaskKey(1, 2, "api");
   const pending = store.start({ ...input, backend: "api" });
   await Promise.resolve();
+  assert.deepEqual(requests[0].body, { force: false, backend: "api", stream: true });
   store.dismiss(apiKey);
   assert.equal(store.get(apiKey)?.dismissed, false);
   store.stop(apiKey);

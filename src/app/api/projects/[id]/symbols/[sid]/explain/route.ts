@@ -85,7 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return `方法内第 ${c.line - sym.startLine + 1} 行 ${c.calleeText} → ${c.target ?? "（无项目内目标）"} [${label}]`;
   });
 
-  const execute = async (signal: AbortSignal, onProgress?: (phase: AgentPhase) => void): Promise<ExplanationResponse> => {
+  const execute = async (signal: AbortSignal, onProgress?: (phase: AgentPhase) => void, onDelta?: (text: string) => void): Promise<ExplanationResponse> => {
     const started = Date.now();
     const phases: Partial<Record<AgentPhase, number>> = {};
     let completed = false;
@@ -102,7 +102,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
     const explanation = agentConfig
       ? await completeAgent(agentConfig, EXPLAIN_SYSTEM_PROMPT, prompt, signal, (phase) => { phases[phase] = Date.now() - started; onProgress?.(phase); })
-      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt, signal);
+      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt, signal, onDelta && {
+          onDelta: (text) => { phases.responding ??= Date.now() - started; onDelta(text); },
+        });
     if (signal.aborted) throw new AiError("讲解已取消", 499);
     const model = agentConfig ? `Codex · ${agentConfig.model ?? "默认模型"}` : apiConfig!.model;
     const now = new Date();
@@ -116,7 +118,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
   };
 
-  if (body.stream === true && agentConfig) return explanationStream(req.signal, agentConfig.timeoutMs, execute);
+  if (body.stream === true) return explanationStream(req.signal, agentConfig?.timeoutMs, execute);
   try {
     return Response.json(await execute(req.signal));
   } catch (e) {
