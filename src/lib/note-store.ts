@@ -13,6 +13,18 @@ export function ensureNoteTables(db: LibSQLDatabase) {
         title text not null, body text not null, tags text not null, status text not null,
         version integer not null, anchor text, quote text, deleted_at integer, created_at integer not null, updated_at integer not null)`);
       await db.run(sql`create index if not exists learning_notes_project_idx on learning_notes(project_id, deleted_at, updated_at)`);
+      await db.run(sql`create table if not exists learning_note_links (
+        project_id integer not null references projects(id) on delete cascade,
+        source_id text not null references learning_notes(id) on delete cascade,
+        target_id text not null references learning_notes(id) on delete cascade, label text not null,
+        primary key(project_id,source_id,target_id))`);
+      await db.run(sql`create index if not exists learning_note_links_target_idx on learning_note_links(project_id,target_id)`);
+      await db.run(sql`create table if not exists learning_note_evidence (
+        note_id text primary key references learning_notes(id) on delete cascade, anchor text not null)`);
+      await db.run(sql`create table if not exists learning_note_imports (
+        project_id integer not null references projects(id) on delete cascade, source_id text not null,
+        fingerprint text not null, note_id text not null references learning_notes(id) on delete cascade,
+        primary key(project_id,source_id,fingerprint))`);
     })().catch((error) => { ready.delete(db); throw error; });
     ready.set(db, promise);
   }
@@ -43,7 +55,8 @@ export async function viewNote(tx: Reader, projectId: number, note: LearningNote
     const index = locateQuote(source, note.quote);
     if (index !== null) { quoteStartLine = line + source.slice(0, index).split("\n").length - 1; quoteEndLine = quoteStartLine + note.quote.text.split("\n").length - 1; }
   }
-  return { ...note, resolution, quoteStartLine, quoteEndLine };
+  const [evidence] = await tx.all<{ anchor: string }>(sql`select anchor from learning_note_evidence where note_id=${note.id}`);
+  return { ...note, resolution, quoteStartLine, quoteEndLine, importedAnchor: evidence ? JSON.parse(evidence.anchor) : null };
 }
 export async function listNotes(tx: Reader, projectId: number, page: number, trash: boolean) {
   const where = sql`project_id = ${projectId} and ${trash ? sql`deleted_at is not null` : sql`deleted_at is null`}`;
@@ -88,6 +101,7 @@ export async function writeNote(tx: Reader, projectId: number, input: Record<str
     const now = Date.now();
     await tx.run(sql`insert into learning_notes(id,project_id,title,body,tags,status,version,anchor,quote,created_at,updated_at)
       values (${id},${projectId},${content.title},${content.body},${JSON.stringify(content.tags)},${content.status},1,${anchor ? JSON.stringify(anchor) : null},${quote ? JSON.stringify(quote) : null},${now},${now})`);
+    if (copied) await tx.run(sql`insert into learning_note_evidence(note_id,anchor) select ${id},anchor from learning_note_evidence where note_id=${copied.id}`);
     return noteById(tx, projectId, id);
   }
   const old = await noteById(tx, projectId, id);

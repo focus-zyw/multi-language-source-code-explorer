@@ -8,7 +8,10 @@ export interface LearningNote extends NoteContent {
 }
 export interface NoteView extends LearningNote {
   resolution: AnchorResolution | null; quoteStartLine: number | null; quoteEndLine: number | null;
+  importedAnchor?: LearningAnchor | null;
 }
+export interface NoteReference { id: string; title: string; deleted: boolean; label: string }
+export interface NoteConnections { outgoing: NoteReference[]; incoming: NoteReference[]; choices: { id: string; title: string }[] }
 export interface NoteList { revision: number; total: number; page: number; items: NoteView[] }
 export function parseNoteContent(value: unknown): NoteContent | null {
   if (!value || typeof value !== "object") return null;

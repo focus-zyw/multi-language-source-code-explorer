@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { FileImportInfo, ProjectStats, SkippedInfo } from "@/lib/shared";
 import type { ParamInfo, SymbolMetrics } from "@/lib/analysis/types";
 
@@ -39,6 +39,20 @@ export const learningNotes = sqliteTable("learning_notes", {
   version: integer("version").notNull(), anchor: text("anchor"), quote: text("quote"), deletedAt: integer("deleted_at"),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("learning_notes_project_idx").on(t.projectId, t.deletedAt, t.updatedAt)]);
+
+export const learningNoteLinks = sqliteTable("learning_note_links", {
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  sourceId: text("source_id").notNull().references(() => learningNotes.id, { onDelete: "cascade" }),
+  targetId: text("target_id").notNull().references(() => learningNotes.id, { onDelete: "cascade" }), label: text("label").notNull(),
+}, (t) => [primaryKey({ columns: [t.projectId, t.sourceId, t.targetId] }), index("learning_note_links_target_idx").on(t.projectId, t.targetId)]);
+export const learningNoteEvidence = sqliteTable("learning_note_evidence", {
+  noteId: text("note_id").primaryKey().references(() => learningNotes.id, { onDelete: "cascade" }), anchor: text("anchor").notNull(),
+});
+export const learningNoteImports = sqliteTable("learning_note_imports", {
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  sourceId: text("source_id").notNull(), fingerprint: text("fingerprint").notNull(),
+  noteId: text("note_id").notNull().references(() => learningNotes.id, { onDelete: "cascade" }),
+}, (t) => [primaryKey({ columns: [t.projectId, t.sourceId, t.fingerprint] })]);
 
 export const files = sqliteTable(
   "files",

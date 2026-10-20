@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Markdown } from "./Markdown";
+import { NoteConnections } from "./NoteConnections";
+import { NoteTransfer } from "./NoteTransfer";
 import { NOTE_STATES, parseNoteContent, type NoteContent, type NoteList, type NoteView } from "@/lib/note-types";
 interface Props {
   projectId: number; createdAt: string; revision: number; symbolId?: number; symbolName?: string; quote?: string | null;
@@ -30,6 +32,9 @@ export function NotesPanel(props: Props) {
   const [list, setList] = useState<{ key: string; data?: NoteList; error?: string } | null>(null);
   const [editor, setEditor] = useState<Draft | null>(null), [serverCopy, setServerCopy] = useState<NoteView | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [connections, setConnections] = useState<NoteView | null>(null);
+  const [focused, setFocused] = useState<{ note: NoteView; revision: number } | null>(null);
+  const [exportSelection, setExportSelection] = useState<{ id: string; title: string } | null>(null);
   const storageKey = `code-atlas:note-draft:v1:${projectId}:${createdAt}`;
   const raw = useSyncExternalStore(subscribe, () => { try { return localStorage.getItem(storageKey); } catch { return null; } }, () => null);
   const draft = readDraft(raw), key = `${projectId}:${page}:${trash}`;
@@ -73,12 +78,40 @@ export function NotesPanel(props: Props) {
     try { note = await request({ ...saving, content, action: saving.version ? "update" : "create" }); }
     catch (error) { persist(saving); throw error; }
     clearDraft(saving); setEditor(null); setServerCopy(null); setAttempt((n) => n + 1);
+    setFocused(null); setConnections(null);
     setMessage(note.anchor ? "笔记已保存" : "笔记已保存为项目笔记；源码快照变化时不会猜测绑定目标");
   }
   const inputClass = "w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm";
+  async function navigateNote(id: string) {
+    await act(async () => {
+      const r = await fetch(`/api/projects/${projectId}/notes?noteId=${encodeURIComponent(id)}`), data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "笔记加载失败");
+      setFocused({ note: data, revision: data.revision }); setConnections(null);
+    });
+  }
+  function noteCard(note: NoteView, scan: number) {
+    const deleted = note.deletedAt !== null;
+    return <div className="space-y-2 rounded border border-slate-700 p-3">
+      <h3 className="break-words font-semibold">{note.title}{deleted ? "（回收站）" : ""}</h3><p className="break-words text-xs text-slate-400">{NOTE_STATES[note.status]} · v{note.version} · {note.tags.join("、")}</p>
+      {note.anchor && <p className="break-all text-xs text-slate-400">{note.anchor.path} · {note.anchor.name} · {note.resolution?.status === "missing" ? "节点已删除或移动" : note.resolution?.status === "ambiguous" ? "同名目标待确认" : note.resolution?.freshness === "changed" ? "源码已变化，请核对" : "源码未变化"}</p>}
+      {note.importedAnchor && <p className="break-all text-xs text-slate-400">导入的历史源码依据（未绑定）：{note.importedAnchor.path} · {note.importedAnchor.name}</p>}
+      <details><summary className="text-xs">阅读笔记</summary><Markdown text={note.body} />{note.quote && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs">原引用：{note.quote.text}</pre>}</details>
+      <div className="flex flex-wrap gap-3 text-xs">{!deleted && <button disabled={busy} onClick={() => start(note)} className="underline">编辑笔记</button>}
+        {note.resolution?.symbolId && (!note.quote || note.quoteStartLine !== null) && <button disabled={busy} className="underline" onClick={() => onOpen(note.resolution!.symbolId!, note.quoteStartLine, note.quoteEndLine, scan)}>定位源码</button>}
+        <button disabled={busy} className="underline" onClick={() => setConnections(note)}>关联笔记</button>
+        {!deleted && <button className="underline" onClick={() => setExportSelection({ id: note.id, title: note.title })}>导出此篇</button>}
+        <button disabled={busy} className="underline" onClick={() => act(async () => {
+          const updated = await request({ action: deleted ? "restore" : "trash", id: note.id, version: note.version });
+          if (focused?.note.id === note.id) setFocused({ note: updated, revision: scan });
+          setConnections(null); setAttempt((n) => n + 1);
+        })}>{deleted ? "恢复笔记" : "移入回收站"}</button>
+      </div>
+    </div>;
+  }
   return <section aria-label="个人学习笔记" className="space-y-4 p-4 text-sm">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">个人学习笔记</h2><button disabled={busy} onClick={() => start()} className="atlas-primary px-3 py-2 text-xs">{quote ? "新建选区笔记" : symbolId ? "新建节点笔记" : "新建项目笔记"}</button></div>
     {message && <p role="status" className="break-words rounded border border-slate-700 p-2 text-xs leading-5">{message}</p>}
+    <NoteTransfer projectId={projectId} selected={exportSelection} clearSelection={() => setExportSelection(null)} onImported={() => { setConnections(null); setFocused(null); setPage(0); setTrash(false); setAttempt((n) => n + 1); }} />
     {draft && !editor && <div className="flex flex-wrap gap-2 text-xs"><span>有未保存草稿：{draft.content.title || "未命名"}</span><button className="underline" onClick={() => { setServerCopy(null); setEditor(draft); }}>恢复草稿</button><button className="underline" onClick={() => clearDraft()}>清除草稿</button></div>}
     {editor && <form className="space-y-3 rounded border border-slate-700 p-3" onSubmit={(e) => { e.preventDefault(); void act(() => save()); }} onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); void act(() => save()); } }}>
       <fieldset disabled={busy} className="space-y-3">
@@ -97,18 +130,12 @@ export function NotesPanel(props: Props) {
       {serverCopy && <div className="space-y-2 border-t border-slate-700 pt-3"><h3>服务器版本 v{serverCopy.version}（本地草稿保留）</h3><Markdown text={serverCopy.body} /><button type="button" className="text-xs underline" onClick={() => { persist({ ...editor, version: serverCopy.version }); setServerCopy(null); setMessage("本地内容已保留；再次保存将更新刚刚查看的服务器版本"); }}>保留本地内容，继续编辑</button></div>}
       </fieldset>
     </form>}
+    {connections && <NoteConnections key={connections.id} projectId={projectId} note={connections} onNavigate={(id) => void navigateNote(id)} onClose={() => setConnections(null)} />}
+    {focused && <section aria-label="关联目标笔记" className="space-y-2"><button className="text-xs underline" onClick={() => setFocused(null)}>关闭目标笔记</button>{noteCard(focused.note, focused.revision)}</section>}
     <div className="flex gap-3 text-xs"><button aria-pressed={!trash} onClick={() => { setTrash(false); setPage(0); }}>笔记列表</button><button aria-pressed={trash} onClick={() => { setTrash(true); setPage(0); }}>回收站</button></div>
     {!shown ? <p role="status">正在加载笔记…</p> : shown.error ? <p role="alert">{shown.error}<button className="ml-2 underline" onClick={() => setAttempt((n) => n + 1)}>重试</button></p> : <>
       <p className="text-xs text-slate-400">共 {shown.data?.total ?? 0} 篇 · 第 {page + 1} 页 · 项目内笔记集中展示</p>
-      <ul className="space-y-3">{shown.data?.items.map((note) => <li key={note.id} className="space-y-2 rounded border border-slate-700 p-3">
-        <h3 className="break-words font-semibold">{note.title}</h3><p className="break-words text-xs text-slate-400">{NOTE_STATES[note.status]} · v{note.version} · {note.tags.join("、")}</p>
-        {note.anchor && <p className="break-all text-xs text-slate-400">{note.anchor.path} · {note.anchor.name} · {note.resolution?.status === "missing" ? "节点已删除或移动" : note.resolution?.status === "ambiguous" ? "同名目标待确认" : note.resolution?.freshness === "changed" ? "源码已变化，请核对" : "源码未变化"}</p>}
-        <details><summary className="text-xs">阅读笔记</summary><Markdown text={note.body} />{note.quote && <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs">原引用：{note.quote.text}</pre>}</details>
-        <div className="flex flex-wrap gap-3 text-xs">{!trash && <button disabled={busy} onClick={() => start(note)} className="underline">编辑笔记</button>}
-          {note.resolution?.symbolId && (!note.quote || note.quoteStartLine !== null) && <button disabled={busy} className="underline" onClick={() => onOpen(note.resolution!.symbolId!, note.quoteStartLine, note.quoteEndLine, shown.data!.revision)}>定位源码</button>}
-          <button disabled={busy} className="underline" onClick={() => act(async () => { await request({ action: trash ? "restore" : "trash", id: note.id, version: note.version }); setAttempt((n) => n + 1); })}>{trash ? "恢复笔记" : "移入回收站"}</button>
-        </div>
-      </li>)}</ul>
+      <ul className="space-y-3">{shown.data?.items.map((note) => <li key={note.id}>{noteCard(note, shown.data!.revision)}</li>)}</ul>
       {shown.data?.total === 0 && <p className="text-slate-400">{trash ? "回收站为空" : "还没有笔记，可从当前节点或项目开始记录。"}</p>}
       <div className="flex gap-3 text-xs"><button disabled={page === 0} onClick={() => setPage((n) => n - 1)}>上一页</button><button disabled={(page + 1) * 20 >= (shown.data?.total ?? 0)} onClick={() => setPage((n) => n + 1)}>下一页</button></div>
     </>}
