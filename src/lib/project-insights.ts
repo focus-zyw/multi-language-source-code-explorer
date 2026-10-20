@@ -81,7 +81,7 @@ export function buildLearning(files: DependencyFile[], symbols: InsightSymbol[],
   for (const call of calls) {
     const groups = callers.get(call.target) ?? {}; (groups[call.confidence] ??= new Set()).add(call.owner); callers.set(call.target, groups);
   }
-  const methods: LearningItem[] = symbols.filter((symbol) => ["function", "method"].includes(symbol.kind) && !symbol.isTest && !byFile.get(symbol.fileId)?.isTest).map((symbol) => ({
+  const methods: LearningItem[] = symbols.filter((symbol) => byFile.has(symbol.fileId) && ["function", "method"].includes(symbol.kind) && !symbol.isTest && !byFile.get(symbol.fileId)?.isTest).map((symbol) => ({
     id: symbol.id, name: symbol.qualifiedName, path: byFile.get(symbol.fileId)?.path ?? "", line: symbol.startLine, complexity: symbol.complexity, loc: symbol.loc,
     exactCallers: callers.get(symbol.id)?.exact?.size ?? 0, inferredCallers: callers.get(symbol.id)?.inferred?.size ?? 0, candidateCallers: callers.get(symbol.id)?.heuristic?.size ?? 0,
   }));

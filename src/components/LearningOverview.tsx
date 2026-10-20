@@ -6,7 +6,7 @@ export function LearningOverview({ data, scan, onRead }: { data: LearningData; s
   return <div className="space-y-5">
     <p className="text-sm leading-6 text-slate-400">从较复杂、较长或被多个方法引用的代码开始阅读。统计仅包含非测试的函数和方法，不含 HTML / JSON 结构节点。排名帮助选择学习入口，不作为代码质量评分。</p>
     <section className="rounded-xl border border-slate-700 p-4"><h3 className="text-sm font-semibold">圈复杂度分布 · {data.methodCount} 个方法</h3><div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">{data.distribution.map((bucket) => <div key={bucket.label}><p className="flex justify-between text-xs text-slate-400"><span>{bucket.label}</span><span>{bucket.count}</span></p><div className="mt-2 h-2 rounded bg-slate-800"><div className="h-2 rounded bg-indigo-500" style={{ width: `${data.methodCount ? bucket.count / data.methodCount * 100 : 0}%` }} /></div></div>)}</div></section>
-    <p className="text-xs leading-6 text-slate-500">“确定调用方”按不同调用方方法去重，重复调用只计一次；推断与候选单独显示。同一调用方可能在不同可信度中出现。静态引用数不代表运行频率；不同语言的语法度量也不能直接作为质量比较。</p>
+    <p className="text-xs leading-6 text-slate-500">“确定调用方”包含测试中的调用，按不同调用方方法去重，重复调用只计一次；推断与候选单独显示。同一调用方可能在不同可信度中出现。静态引用数不代表运行频率；不同语言的语法度量也不能直接作为质量比较。</p>
     <div className="grid items-start gap-4 xl:grid-cols-3">{ranking("复杂度较高 · 前 20", data.complex, "complexity")}{ranking("确定调用方较多 · 前 20", data.referenced, "exactCallers")}{ranking("源码较长 · 前 20（行）", data.large, "loc")}</div>
     <section className="rounded-xl border border-slate-700 p-4"><h3 className="text-sm font-semibold">最近一次扫描耗时</h3>{scan ? <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">{([
       ["解码与内容过滤", scan.decodeMs], ["语法解析", scan.parseMs], ["引用解析", scan.resolveMs], ["测试关联", scan.testLinkMs], ["事务其余工作", scan.transactionOtherMs], ["流水线合计（提交前）", scan.totalMs],
