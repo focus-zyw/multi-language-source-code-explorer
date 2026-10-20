@@ -63,6 +63,7 @@ async function insertChunked<T>(rows: T[], cols: number, fn: (chunk: T[]) => Pro
 }
 
 export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
+  const startedAt = performance.now();
   const skipped: SkipRecord[] = [...args.skipped];
   const warnings = [...args.warnings];
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -103,6 +104,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
     decoded.push({ path: f.path, content: text, size: f.data.length });
   }
   decoded.sort((a, b) => a.path.localeCompare(b.path));
+  const decodedAt = performance.now();
 
   /* 2. Tree-sitter 解析（纯语法分析，不执行任何项目代码） */
   const units: FileUnit[] = [];
@@ -144,6 +146,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
     }
   }
 
+  const parsedAt = performance.now();
   const languages: Record<string, number> = {};
   for (const u of units) languages[u.language] = (languages[u.language] ?? 0) + 1;
   if (args.files.length && !units.length) {
@@ -152,6 +155,7 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
 
   /* 3. 入库（单事务）：分配 ID → 跨文件解析 → 测试关联 → 批量写入 */
   const result = await db.transaction(async (tx) => {
+    const transactionAt = performance.now();
     if (args.replaceProjectId !== undefined) {
       const [existing] = await tx.select().from(schema.projects).where(eq(schema.projects.id, args.replaceProjectId)).limit(1);
       if (!existing) throw new ImportError("项目不存在", 404);
@@ -166,8 +170,11 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
       symbolIds.push(u.extract.symbols.map(() => flatSymIds[cursor++]));
     }
 
+    const resolveAt = performance.now();
     const resolved = resolveProject(units, symbolIds);
+    const resolvedAt = performance.now();
     const links = linkTests(units, symbolIds, resolved.refs);
+    const linkedAt = performance.now();
     const savedExplanations = args.replaceProjectId !== undefined ? await snapshotExplanations(tx, args.replaceProjectId) : null;
 
     const stats: ProjectStats = {
@@ -316,6 +323,11 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
       ),
     );
 
+    const finishedAt = performance.now();
+    const ms = (value: number) => Math.round(Math.max(0, value) * 10) / 10;
+    stats.scanTimings = { decodeMs: ms(decodedAt - startedAt), parseMs: ms(parsedAt - decodedAt), resolveMs: ms(resolvedAt - resolveAt),
+      testLinkMs: ms(linkedAt - resolvedAt), transactionOtherMs: ms(finishedAt - transactionAt - (linkedAt - resolveAt)), totalMs: ms(finishedAt - startedAt) };
+    await tx.update(schema.projects).set({ stats }).where(eq(schema.projects.id, projectId));
     return { projectId, fileCount: units.length, symbolCount: totalSymbols, stats, preservedExplanations: reusable.rows.length + reusable.legacy.size };
   });
 

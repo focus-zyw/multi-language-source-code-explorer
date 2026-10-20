@@ -34,7 +34,7 @@ test("truncated dependency output explicitly limits cycle conclusions", () => {
 
 test("learning ranks real methods, separates confidence and counts distinct caller methods", () => {
   const symbol = (id: number, patch: Partial<InsightSymbol> = {}): InsightSymbol => ({ id, fileId: 1, parentId: null, name: `s${id}`, qualifiedName: `s${id}`, kind: "function", startLine: id, isTest: false, complexity: id, loc: id * 3, decorators: [], bases: [], ...patch });
-  const result = buildLearning([file(1, "main.ts"), { ...file(2, "test.ts"), isTest: true }], [symbol(1), symbol(2), symbol(3, { kind: "property" }), symbol(4, { isTest: true }), symbol(5, { fileId: 2 })],
+  const result = buildLearning([file(1, "main.ts"), { ...file(2, "test.ts"), isTest: true }], [symbol(1), symbol(2), symbol(3, { kind: "property" }), symbol(4, { isTest: true }), symbol(5, { fileId: 2 }), symbol(6, { fileId: 999 })],
     [{ target: 1, owner: 9, confidence: "exact" }, { target: 1, owner: 9, confidence: "exact" }, { target: 1, owner: 10, confidence: "inferred" }, { target: 1, owner: 11, confidence: "heuristic" }]);
   assert.equal(result.methodCount, 2);
   assert.deepEqual(result.complex.map((item) => item.id), [2, 1]);

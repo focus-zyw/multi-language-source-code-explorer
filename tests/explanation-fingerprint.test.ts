@@ -33,6 +33,14 @@ test("body, identity, analysis facts and resolved call targets invalidate finger
   assert.notEqual(fingerprintExplanation(large), fingerprintExplanation({ ...large, source: large.source + "y" }));
 });
 
+test("newly extracted JS decorator facts invalidate old explanations without invalidating undecorated methods", () => {
+  const original = input();
+  assert.equal(fingerprintExplanation(original), fingerprintExplanation({ ...original, symbol: { ...original.symbol, decorators: [] } }));
+  const decorated = { ...original, symbol: { ...original.symbol, decorators: ['@Get("items")'] } };
+  assert.notEqual(fingerprintExplanation(original), fingerprintExplanation(decorated));
+  assert.notEqual(fingerprintExplanation(decorated), fingerprintExplanation({ ...decorated, symbol: { ...decorated.symbol, decorators: ['@Post("items")'] } }));
+});
+
 test("candidate target ordering is stable and configuration identities remain separate", () => {
   const original = input();
   original.calls[0].targets.push({ ...original.calls[0].targets[0], filePath: "src/second.ts" });
