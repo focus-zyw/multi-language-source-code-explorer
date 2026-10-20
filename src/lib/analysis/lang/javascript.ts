@@ -128,6 +128,7 @@ interface ParsedParam {
 
 function parseParams(fn: SyntaxNode, source: string): ParsedParam[] {
   const t = (n: SyntaxNode) => slice(source, n);
+
   const out: ParsedParam[] = [];
   const single = fn.childForFieldName("parameter");
   if (single) {
@@ -199,6 +200,21 @@ function extract(root: SyntaxNode, source: string, filePath: string): ExtractRes
   const res: ExtractResult = { symbols: [], calls: [], imports: [], hints: [], defaultExportName: null, hasSyntaxErrors: root.hasError };
   const t = (n: SyntaxNode) => slice(source, n);
 
+  const decoratorInfo = (node: SyntaxNode, outer: SyntaxNode) => {
+    const nodes = new Map<number, SyntaxNode>();
+    for (const child of [...node.namedChildren, ...(outer.id === node.id ? [] : outer.namedChildren)]) if (child.type === "decorator") nodes.set(child.startIndex, child);
+    let previous = node.previousNamedSibling;
+    while (previous && (previous.type === "decorator" || previous.type === "comment")) {
+      if (previous.type === "decorator") nodes.set(previous.startIndex, previous);
+      previous = previous.previousNamedSibling;
+    }
+    const ordered = [...nodes.values()].sort((a, b) => a.startIndex - b.startIndex);
+    const first = ordered[0];
+    return { decorators: ordered.map((item) => oneLine(t(item), 80)), range: first && first.startIndex < outer.startIndex
+      ? { ...rangeOf(outer), startIndex: first.startIndex, startLine: first.startPosition.row + 1, startCol: first.startPosition.column + 1 } : rangeOf(outer) };
+  };
+
+
   interface AddFn {
     fn: SyntaxNode;
     outer: SyntaxNode;
@@ -220,8 +236,9 @@ function extract(root: SyntaxNode, source: string, filePath: string): ExtractRes
     const localId = res.symbols.length;
     const { metrics, isGenerator } = computeMetrics(fn, metricCfg, params.length);
     const rt = fn.childForFieldName("return_type");
-    const decorators = fn.children.filter((c) => c.type === "decorator").map((d) => oneLine(t(d), 80));
-    const signature = o.signature ?? oneLine(source.slice(o.outer.startIndex, body ? body.startIndex : fn.endIndex), 200);
+    const decorated = decoratorInfo(fn, o.outer);
+    const decorators = decorated.decorators;
+    const signature = o.signature ?? oneLine(source.slice(decorated.range.startIndex, body ? body.startIndex : fn.endIndex), 200);
     res.symbols.push({
       localId,
       parentLocalId: o.ctx.scope,
@@ -240,7 +257,7 @@ function extract(root: SyntaxNode, source: string, filePath: string): ExtractRes
       docstring: o.kind === "test" ? null : jsdocOf(o.docFrom ?? o.outer, source),
       returnType: rt ? oneLine(t(rt).replace(/^:\s*/, ""), 60) : null,
       bases: [],
-      ...rangeOf(o.outer),
+      ...decorated.range,
       defStartIndex: fn.startIndex,
       defEndIndex: fn.endIndex,
       metrics,
@@ -312,11 +329,11 @@ function extract(root: SyntaxNode, source: string, filePath: string): ExtractRes
       isDefaultExport: isDefault,
       signature: oneLine(source.slice(outer.startIndex, body.startIndex), 200),
       params: [],
-      decorators: node.children.filter((c) => c.type === "decorator").map((d) => oneLine(t(d), 80)),
+      decorators: decoratorInfo(node, outer).decorators,
       docstring: jsdocOf(outer, source),
       returnType: null,
       bases,
-      ...rangeOf(outer),
+      ...decoratorInfo(node, outer).range,
       defStartIndex: node.startIndex,
       defEndIndex: node.endIndex,
       metrics,

@@ -1,4 +1,5 @@
 import type { ProjectEntries, ProjectEntry, ProjectEntryGroup } from "../api-types.ts";
+import { routeHint } from "./route-hints.ts";
 
 export interface EntrySymbol {
   id: number;
@@ -25,13 +26,16 @@ const GROUPS: Omit<ProjectEntryGroup, "entries">[] = [
 /** These are navigation suggestions, never synthetic call edges. No source is executed. */
 export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[], calledIds: ReadonlySet<number>): ProjectEntries {
   const byFile = new Map(files.map((file) => [file.id, file]));
+  const bySymbol = new Map(symbols.map((symbol) => [symbol.id, symbol]));
   const groups = GROUPS.map((group) => ({ ...group, entries: [] as ProjectEntry[] }));
   const candidates: ProjectEntry[] = [];
   for (const item of symbols) {
     const file = byFile.get(item.fileId);
     if (!file || item.isTest || file.isTest || /(^|\/)(?:tests?|__tests__|fixtures|__fixtures__)(\/|$)/i.test(file.path.replaceAll("\\", "/"))) continue;
     const javaMethod = /\.java$/.test(file.path) && item.kind === "method" && item.name !== "constructor";
-    if ((item.parentId !== null || item.kind !== "function") && !javaMethod) continue;
+    const parent = item.parentId === null ? undefined : bySymbol.get(item.parentId);
+    const route = routeHint(item.decorators, file.path.replaceAll("\\", "/"), parent?.kind === "class" ? parent.decorators : []);
+    if ((item.parentId !== null || item.kind !== "function") && !javaMethod && !(item.kind === "method" && route)) continue;
     const path = file.path.replaceAll("\\", "/");
     const base = path.split("/").at(-1)!;
     const isDefault = /^export\s+default\b/.test(item.signature);
@@ -45,14 +49,13 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
       group = "pages"; reason = "Vue 单文件组件入口；包含脚本初始化与模板静态绑定，不表示具体挂载顺序";
     } else if (javaMethod && item.name === "main" && /\bstatic\s+void\s+main\s*\(/.test(item.signature)) {
       group = "startup"; reason = "按 Java static void main 方法签名识别，未验证构建配置"; confidence = "heuristic";
-    } else if (javaMethod && item.decorators.some((d) => /^@(?:[\w.]*\.)?(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\b/.test(d))) {
-      group = "api"; reason = "按 Java 路由注解约定识别，未验证框架运行时注册";
+    } else if (route) {
+      group = "api";
+      reason = `${route.methods.join(" / ")} · ${route.paths.length ? route.paths.map((value) => value || "/").join("、") : "路径表达式无法静态确定"}${route.partial ? "（信息不完整，路径可能只是片段）" : ""}；${route.note}；依据：${route.evidence.join("；")}`;
     } else if (/(?:^|\/)app\/(?:.*\/)?route\.[cm]?[jt]sx?$/.test(path) && METHODS.has(item.name) && exported) {
       group = "api"; label = `${item.name} · ${path}`; reason = "App Router 的 route 文件中导出的 HTTP 处理方法";
     } else if (/(?:^|\/)pages\/api\/.+\.[cm]?[jt]sx?$/.test(path) && isDefault) {
       group = "api"; reason = "Pages Router 的 API 文件默认导出";
-    } else if (item.decorators.some((value) => /^@(?:\w+\.)+(?:route|get|post|put|patch|delete|head|options|websocket)\s*\(/.test(value))) {
-      group = "api"; reason = `路由装饰器：${item.decorators.filter((value) => /\.(?:route|get|post|put|patch|delete|head|options|websocket)\s*\(/.test(value)).join("；")}`;
     } else if (/(?:^|\/)app\/(?:.*\/)?(?:page|layout)\.[cm]?[jt]sx?$/.test(path) && isDefault) {
       group = "pages"; reason = "App Router 的 page / layout 文件默认导出";
     } else if (/(?:^|\/)pages\/(?!api\/).+\.[cm]?[jt]sx?$/.test(path) && isDefault) {
