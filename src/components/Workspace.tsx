@@ -22,6 +22,7 @@ import { ReadingShortcutHint } from "./ReadingZoom";
 import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
 import { mergeWorkspaceSearch, searchFromWorkspace } from "@/lib/symbol-search";
 import { LearningControls } from "./LearningControls";
+import { restoredReadingParams } from "@/lib/learning-types";
 import { NotesPanel } from "./NotesPanel";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
@@ -297,9 +298,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
           <LearningControls projectId={project.id} createdAt={project.createdAt} revision={project.scanRevision} selectedId={selectedId} rootId={rootId}
             overview={projectOverview} view={exploring ? "explore" : "source"} direction={direction} tab={tab} mode={mode}
             onRestore={(selected, root, position, reload) => {
-              const params = new URLSearchParams(sp.toString()); params.set("s", String(selected));
-              if (position?.view === "explore" && root !== null) { params.set("view", "explore"); params.set("root", String(root)); params.set("direction", position.direction); }
-              else { params.delete("view"); params.delete("root"); params.delete("direction"); }
+              const params = restoredReadingParams(new URLSearchParams(sp.toString()), selected, root, position);
               if (position) { setTab(position.tab as Tab); setMode(position.mode); params.set("panel", position.tab); params.set("codeMode", position.mode); }
               if (reload) window.location.assign(`${pathname}?${params}`); else router.push(`${pathname}?${params}`, { scroll: false });
             }} />

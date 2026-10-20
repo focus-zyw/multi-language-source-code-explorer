@@ -4,7 +4,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { sql } from "drizzle-orm";
 import { ensureLearningTables, scanRevision, advanceScanRevision, captureAnchor, resolveAnchor, addBookmark, listBookmarks } from "../src/lib/learning-store.ts";
-import { readReadingPosition, isLearningAnchor } from "../src/lib/learning-types.ts";
+import { readReadingPosition, isLearningAnchor, restoredReadingParams, type ReadingPosition } from "../src/lib/learning-types.ts";
 
 async function fixture() {
   const client = createClient({ url: ":memory:" });
@@ -53,6 +53,19 @@ test("rescans retain bookmarks and rebind line shifts, preserve changed/missing/
     await f.client.execute("delete from projects where id=1"); assert.equal((await listBookmarks(f.db, 1)).length, 0);
   } finally { f.client.close(); }
 });
+
+test("bookmark identity survives changes in the number of same-name candidates", async () => {
+  const f = await fixture(); try {
+    const other = "function foo() { return 2; }";
+    await f.client.execute({ sql: "insert into files values (2,1,'app.ts','typescript',?)", args: [other] });
+    await f.client.execute({ sql: "insert into symbols values (2,1,2,'function','foo',1,0,?)", args: [other.length] });
+    const first = await addBookmark(f.db, 1, 1, 1);
+    await f.client.execute("delete from files where id=2");
+    await advanceScanRevision(f.db, 1, true);
+    assert.equal(await addBookmark(f.db, 1, 1, 2), first);
+    assert.equal((await listBookmarks(f.db, 1)).length, 1);
+  } finally { f.client.close(); }
+});
 test("failed replacement rolls back revision and analysis, identical ambiguous copies do not merge", async () => {
   const f = await fixture(); try {
     await f.client.execute("insert into symbols select 2,project_id,file_id,kind,qualified_name,start_line,start_index,end_index from symbols where id=1");
@@ -67,6 +80,16 @@ test("local reading state validates version, project identity and allowed naviga
   const f = await fixture(); try {
     const selected = await captureAnchor(f.db, 1, 1);
     const position = { version: 1, projectCreatedAt: "created", revision: 1, selected, root: selected, view: "explore", direction: "incoming", tab: "vars", mode: "file" };
+    const restored = restoredReadingParams(new URLSearchParams("ai=api&search.q=foo"), 2, 1, { ...position, view: "source" } as ReadingPosition);
+    assert.equal(restored.get("root"), "1");
+    assert.equal(restored.get("s"), "2");
+    assert.equal(restored.get("view"), null);
+    assert.equal(restored.get("direction"), "incoming");
+    assert.equal(restored.get("ai"), "api");
+    assert.equal(restored.get("search.q"), "foo");
+    const missing = restoredReadingParams(restored, 2, null, position as ReadingPosition);
+    assert.equal(missing.get("root"), null);
+    assert.equal(missing.get("direction"), null);
     assert.deepEqual(readReadingPosition(JSON.stringify(position), "created"), position);
     for (const change of [{ version: 2 }, { revision: -1 }, { tab: "unknown" }, { selected: {} }, { mode: "edit" }]) assert.equal(readReadingPosition(JSON.stringify({ ...position, ...change }), "created"), null);
     assert.equal(readReadingPosition(JSON.stringify(position), "different-project"), null);

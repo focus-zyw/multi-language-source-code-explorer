@@ -34,14 +34,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // Return coverage only for the requested symbol's file, after checking ownership and both source copies.
     const sid = parseId(new URL(req.url).searchParams.get("symbolId") ?? "");
     let coverage = run?.coverage ?? [];
+    let trace = run?.trace;
+    let traceNote = run?.traceNote;
     if (sid) {
-      const [row] = await db.select({ path: files.path, content: files.content }).from(symbols).innerJoin(files, eq(symbols.fileId, files.id)).where(and(eq(symbols.id, sid), eq(symbols.projectId, id)));
+      const [row] = await db.select({ path: files.path, content: files.content, startLine: symbols.startLine, endLine: symbols.endLine }).from(symbols).innerJoin(files, eq(symbols.fileId, files.id)).where(and(eq(symbols.id, sid), eq(symbols.projectId, id)));
       if (!row) throw new ImportError("方法不属于该项目或已重新扫描", 404);
       let liveHash = "";
       try { liveHash = hashSource(await safeFile(root, row.path)); } catch { /* Do not map unavailable files. */ }
       coverage = coverage.filter((file) => file.path === row.path && file.sourceHash === hashSource(row.content) && file.sourceHash === liveHash);
-    } else coverage = [];
-    return Response.json({ enabled: true, profiles, reason: profiles.length ? "" : "未发现可直接运行的测试配置。支持简单的 package.json test/test:* 脚本（node --test、vitest、jest），以及含配置文件的 pytest。不会执行 shell 组合脚本或安装依赖。", run: run ? { ...run, coverage } : null } satisfies TestRunState);
+      if (trace && (trace.target.file !== row.path || trace.target.startLine !== row.startLine || trace.target.endLine !== row.endLine || trace.target.sourceHash !== hashSource(row.content) || trace.target.sourceHash !== liveHash)) {
+        trace = undefined;
+        traceNote = "调用记录不属于当前源码版本或文件，已隐藏；请在当前方法重新运行。";
+      }
+    } else { coverage = []; trace = undefined; }
+    return Response.json({ enabled: true, profiles, reason: profiles.length ? "" : "未发现可直接运行的测试配置。支持简单的 package.json test/test:* 脚本（node --test、vitest、jest），以及含配置文件的 pytest。不会执行 shell 组合脚本或安装依赖。", run: run ? { ...run, coverage, trace, traceNote } : null } satisfies TestRunState);
   } catch (error) { return failure(error); }
 }
 
@@ -60,12 +66,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (body.trace === true) {
       const sid = parseId(String(body.symbolId ?? ""));
       if (!sid) throw new ImportError("追踪需要指定一个方法");
-      const [row] = await db.select({ name: symbols.name, path: files.path, language: files.language })
+      const [row] = await db.select({ name: symbols.name, kind: symbols.kind, startLine: symbols.startLine, endLine: symbols.endLine, path: files.path, language: files.language, content: files.content })
         .from(symbols).innerJoin(files, eq(symbols.fileId, files.id))
         .where(and(eq(symbols.id, sid), eq(symbols.projectId, id)));
       if (!row) throw new ImportError("方法不属于该项目或已重新扫描", 404);
       if (row.language !== "python") throw new ImportError("调用追踪目前只支持 Python 方法", 400);
-      trace = { file: row.path, func: row.name };
+      if (!["function", "method", "test"].includes(row.kind)) throw new ImportError("请选择一个有函数体的方法进行追踪", 400);
+      trace = { file: row.path, func: row.name, startLine: row.startLine, endLine: row.endLine, sourceHash: hashSource(row.content) };
     }
     const sources = body.coverage ? await db.select({ path: files.path, content: files.content }).from(files).where(eq(files.projectId, id)) : [];
     const result = await startRun(id, root, profile, body.coverage, sources, undefined, trace);

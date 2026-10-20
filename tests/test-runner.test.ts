@@ -106,6 +106,9 @@ test("trace run injects the pytest plugin env and parses recorded calls", async 
   });
   try {
     // 假 runner：校验注入的环境变量，然后按插件格式写结果。
+    const source = "def add(x):\n    return x\n";
+    await writeFile(path.join(root, "mylib.py"), source);
+    const target = { file: "mylib.py", func: "add", startLine: 1, endLine: 2, sourceHash: hashSource(source) };
     await writeFile(path.join(root, "fake.mjs"), [
       "import { writeFileSync } from 'node:fs';",
       "const out = process.env.ATLAS_TRACE_OUT;",
@@ -117,7 +120,7 @@ test("trace run injects the pytest plugin env and parses recorded calls", async 
     ].join("\n"));
     const profile = { id: "pytest", label: "pytest", command: "python -m pytest", coverage: false, kind: "pytest" as const, executable: process.execPath, args: [path.join(root, "fake.mjs")] };
 
-    const run = await finish(await startRun(7201, root, profile, false, [], 60_000, { file: "mylib.py", func: "add" }));
+    const run = await finish(await startRun(7201, root, profile, false, [], 60_000, target));
     assert.equal(run.status, "passed");
     assert.match(run.command, /-p atlas_trace_plugin/);
     assert.equal(run.trace?.calls, 2);
@@ -127,10 +130,17 @@ test("trace run injects the pytest plugin env and parses recorded calls", async 
 
     // 插件没写出结果时，给出可解释的说明而不是空对象。
     await writeFile(path.join(root, "fake.mjs"), "process.exit(0);");
-    const missing = await finish(await startRun(7201, root, profile, false, [], 60_000, { file: "mylib.py", func: "add" }));
+    const missing = await finish(await startRun(7201, root, profile, false, [], 60_000, target));
     assert.equal(missing.trace?.calls, 0);
     assert.match(missing.trace?.note ?? "", /没有产出追踪结果/);
 
-    await assert.rejects(startRun(7202, root, { ...profile, kind: "node" }, false, [], 60_000, { file: "mylib.py", func: "add" }), /只支持 pytest/);
+    await assert.rejects(startRun(7202, root, { ...profile, kind: "node" }, false, [], 60_000, target), /只支持 pytest/);
+    await writeFile(path.join(root, "mylib.py"), source + "# changed\n");
+    await assert.rejects(startRun(7203, root, profile, false, [], 60_000, target), /源码已变化/);
+    await writeFile(path.join(root, "mylib.py"), source);
+    await writeFile(path.join(root, "fake.mjs"), "import {writeFileSync} from 'node:fs'; writeFileSync('mylib.py', '# changed during run'); writeFileSync(process.env.ATLAS_TRACE_OUT, " + JSON.stringify(report) + ");");
+    const changed = await finish(await startRun(7204, root, profile, false, [], 60_000, target));
+    assert.equal(changed.trace, undefined);
+    assert.match(changed.traceNote!, /源码在运行中发生变化/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

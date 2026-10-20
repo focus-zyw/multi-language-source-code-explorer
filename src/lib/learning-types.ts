@@ -18,6 +18,16 @@ export interface ReadingPosition {
   view: "source" | "explore"; direction: "incoming" | "outgoing";
   tab: string; mode: "method" | "file";
 }
+export function restoredReadingParams(current: URLSearchParams, selected: number, root: number | null, position: ReadingPosition | null) {
+  const params = new URLSearchParams(current);
+  params.set("s", String(selected));
+  if (root !== null) { params.set("root", String(root)); params.set("direction", position?.direction ?? "outgoing"); }
+  else { params.delete("root"); params.delete("direction"); }
+  if (position?.view === "explore" && root !== null) params.set("view", "explore");
+  else params.delete("view");
+  if (position) { params.set("panel", position.tab); params.set("codeMode", position.mode); }
+  return params;
+}
 export function isLearningAnchor(value: unknown): value is LearningAnchor {
   if (!value || typeof value !== "object") return false;
   const a = value as Record<string, unknown>;

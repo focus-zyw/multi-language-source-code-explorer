@@ -90,6 +90,10 @@ export async function addBookmark(tx: Reader, projectId: number, symbolId: numbe
   if (expectedRevision !== revision) throw new LearningError("源码快照已变化，请刷新后再收藏", 409);
   const anchor = await captureAnchor(tx, projectId, symbolId);
   if ((await resolveAnchor(tx, projectId, anchor)).status !== "resolved") throw new LearningError("同名节点的源码也完全相同，暂时无法建立唯一书签", 409);
+  // 候选数量变化可能改变 unique / anchor_key，但已经解析到同一节点的书签仍是同一个收藏。
+  const bookmarks = await listBookmarks(tx, projectId);
+  const sameTarget = bookmarks.find((bookmark) => bookmark.symbolId === symbolId);
+  if (sameTarget) return sameTarget.id;
   const key = hashSource(JSON.stringify([anchor.path, anchor.language, anchor.kind, anchor.name, anchor.unique ? null : anchor.hash]));
   const [existing] = await tx.all<{ id: string }>(sql`select id from learning_bookmarks where project_id = ${projectId} and anchor_key = ${key}`);
   if (existing) return existing.id;

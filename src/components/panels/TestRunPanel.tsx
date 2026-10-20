@@ -103,6 +103,7 @@ export function TestRunPanel({ projectId, detail }: { projectId: number; detail:
         {lines.length > 500 && <p className="text-xs text-slate-400">仅展示前 500 行，统计包含全部报告行。</p>}
       </details>}
       {!running && !lines.length && <p className="text-xs text-slate-400">当前方法没有可匹配的覆盖率数据：可能未采集、未包含此文件，或磁盘源码与导入版本已变化。这不表示覆盖率为 0。</p>}
+      {run.traceNote && <p className="text-xs text-slate-400">{run.traceNote}</p>}
       {run.trace && <details open>
         <summary className="cursor-pointer text-xs text-slate-100">调用记录：{run.trace.target.func} 在本次测试中被调用 {run.trace.calls} 次{run.trace.truncated ? "（已截断）" : ""}</summary>
         {run.trace.note && <p className="mt-1 text-xs leading-5 text-slate-400">{run.trace.note}</p>}

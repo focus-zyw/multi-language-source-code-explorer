@@ -32,6 +32,8 @@ test("isolated test runner API: consent, origin, ownership, real execution, stop
     await writeFile(join(root, "check.test.mjs"), 'import {test} from "node:test"; import assert from "node:assert/strict"; import {double} from "./main.mjs"; test("double", () => assert.equal(double(3), 6));');
     await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { test: "node --test check.test.mjs" } }));
     const post = (url, body, headers = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+    assert.equal((await fetch(`${base}/trace`)).status, 404);
+    assert.equal((await post(`${base}/api/trace`, { code: "raise RuntimeError('must never run')", entry: "main", args: [] })).status, 404);
     const imported = await (await post(`${base}/api/projects/local`, { action: "import", path: root })).json(); assert.ok(imported.id);
     const tree = await (await fetch(`${base}/api/projects/${imported.id}/tree`)).json();
     const sid = tree.symbols.find((s) => s.name === "double" && s.kind === "function").id;

@@ -9,7 +9,7 @@ import type { CoverageFile, TestRunnerProfile, TestRunResult, RunnerKind, TraceC
 interface Profile extends TestRunnerProfile { kind: RunnerKind; executable: string; args: string[] }
 interface Slot { root: string; result: TestRunResult; controller: AbortController }
 /** 追踪目标：项目内的相对文件路径 + 函数名。只有 pytest 支持。 */
-export interface TraceTarget { file: string; func: string }
+export interface TraceTarget { file: string; func: string; startLine: number; endLine: number; sourceHash: string }
 const TRACE_MAX_NODES = 300;
 const shared = globalThis as typeof globalThis & { __atlasTestRuns?: Map<number, Slot> };
 const runs = shared.__atlasTestRuns ??= new Map<number, Slot>();
@@ -169,6 +169,7 @@ export async function startRun(projectId: number, root: string, profile: Profile
   if ([...runs.values()].filter((s) => s.result.status === "running").length >= 2) throw new ImportError("最多同时运行两个项目的测试", 429);
   if (coverage && !profile.coverage) throw new ImportError("此 runner 暂不支持行覆盖率", 400);
   if (trace && profile.kind !== "pytest") throw new ImportError("调用追踪目前只支持 pytest", 400);
+  if (trace && hashSource(await safeFile(root, trace.file)) !== trace.sourceHash) throw new ImportError("源码已变化，请重新扫描后再追踪", 409);
   const controller = new AbortController();
   const result: TestRunResult = { id: randomUUID(), status: "running", command: profile.command, startedAt: Date.now(), exitCode: null, output: "", truncated: false, coverage: [], coverageNote: coverage ? "正在收集本次运行的覆盖率" : "本次未收集覆盖率" };
   // Reserve before asynchronous filesystem work to prevent double-starts.
@@ -188,7 +189,7 @@ export async function startRun(projectId: number, root: string, profile: Profile
       if (trace) args.push("-p", "atlas_trace_plugin");
       const traceOut = trace ? path.join(temp, "trace.json") : undefined;
       const traceEnv = trace && traceOut
-        ? { PYTHONPATH: [pluginDirectory(), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter), ATLAS_TRACE_FILE: trace.file, ATLAS_TRACE_FUNC: trace.func, ATLAS_TRACE_OUT: traceOut, ATLAS_TRACE_MAX_NODES: String(TRACE_MAX_NODES) }
+        ? { PYTHONPATH: [pluginDirectory(), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter), ATLAS_TRACE_FILE: trace.file, ATLAS_TRACE_FUNC: trace.func, ATLAS_TRACE_START_LINE: String(trace.startLine), ATLAS_TRACE_END_LINE: String(trace.endLine), ATLAS_TRACE_OUT: traceOut, ATLAS_TRACE_MAX_NODES: String(TRACE_MAX_NODES) }
         : undefined;
       if (coverage) {
         if (profile.kind === "vitest") args.push("--coverage", "--coverage.reporter=lcov", `--coverage.reportsDirectory=${temp}`);
@@ -201,6 +202,7 @@ export async function startRun(projectId: number, root: string, profile: Profile
         try { const live = await safeFile(root, source.path); if (live === source.content) before.set(source.path, hashSource(live)); } catch { /* Changed/unavailable sources cannot be mapped. */ }
       }
       if (controller.signal.aborted) { outcome = "cancelled"; return; }
+      if (trace && hashSource(await safeFile(root, trace.file)) !== trace.sourceHash) throw new ImportError("源码已变化，请重新扫描后再追踪", 409);
       outcome = await new Promise<TestRunResult["status"]>((resolve) => {
         const child = spawn(profile.executable, args, { cwd: root, env: childEnvironment(traceEnv), shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
         let reason: "cancelled" | "timed-out" | undefined;
@@ -248,9 +250,11 @@ export async function startRun(projectId: number, root: string, profile: Profile
           if (!mapped.length) result.coverageNote += " 没有可映射到已导入源码的覆盖数据。";
         } catch { result.coverageNote = "未生成有效 LCOV 报告；请检查 runner 的覆盖率支持与已有依赖，应用不会自动安装。"; }
       }
-      if (trace && traceOut && !controller.signal.aborted) {
+      if (trace && traceOut && !controller.signal.aborted && outcome !== "timed-out") {
         try {
-          result.trace = parseTrace(await readFile(traceOut, "utf8"), trace);
+          if (hashSource(await safeFile(root, trace.file)) !== trace.sourceHash) {
+            result.traceNote = "源码在运行中发生变化，已隐藏调用记录，请重新扫描后再运行。";
+          } else result.trace = parseTrace(await safeFile(temp, "trace.json", 8_000_000), trace);
         } catch {
           result.trace = { target: trace, calls: 0, nodeCount: 0, truncated: false, roots: [], note: "测试进程没有产出追踪结果：可能测试在收集阶段就失败了，或 pytest 插件未能加载。" };
         }

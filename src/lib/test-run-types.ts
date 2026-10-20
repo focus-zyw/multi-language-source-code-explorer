@@ -24,6 +24,7 @@ export interface TestRunResult {
   coverageNote: string;
   /** 测试运行期间对目标符号的调用记录；未开启追踪时为 undefined。 */
   trace?: TestRunTrace;
+  traceNote?: string;
 }
 
 export interface TraceArg {
@@ -43,7 +44,7 @@ export interface TraceCall {
 
 /** 一次测试运行里目标符号的真实调用记录。注意：多数方法是平铺的多次调用，而不是深树。 */
 export interface TestRunTrace {
-  target: { file: string; func: string };
+  target: { file: string; func: string; startLine: number; endLine: number; sourceHash: string };
   calls: number;
   nodeCount: number;
   truncated: boolean;
