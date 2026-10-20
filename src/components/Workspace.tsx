@@ -14,7 +14,7 @@ import { RescanButton } from "./RescanButton";
 import { ResizablePanels } from "./ResizablePanels";
 import { ResizableSidebar } from "./ResizableSidebar";
 import { SymbolTree } from "./SymbolTree";
-import { ProjectOverview } from "./ProjectOverview";
+import { ProjectHub, type OverviewSection } from "./ProjectHub";
 import { ExplainPanel } from "./panels/ExplainPanel";
 import { QuestionsPanel } from "./panels/QuestionsPanel";
 import type { QuestionQuote } from "@/lib/question-types";
@@ -55,6 +55,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const rootParam = sp.get("root");
   const rootId = rootParam && /^\d{1,9}$/.test(rootParam) ? Number(rootParam) : null;
   const projectOverview = exploring && (!rootParam || rootParam === "project");
+  const overviewParam = sp.get("overview");
+  const overviewSection: OverviewSection = overviewParam === "dependencies" || overviewParam === "learning" || overviewParam === "search" ? overviewParam : "entries";
   const direction: CallTreeDirection = sp.get("direction") === "incoming" ? "incoming" : "outgoing";
 
   const [detail, setDetail] = useState<SymbolDetail | null>(null);
@@ -162,6 +164,12 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     router.push(`${pathname}?${params}`, { scroll: false });
   }, [sp, router, pathname]);
 
+  const changeOverviewSection = useCallback((section: OverviewSection) => {
+    const params = new URLSearchParams(sp.toString());
+    params.set("view", "explore"); params.set("root", "project"); params.set("overview", section);
+    router.push(`${pathname}?${params}`, { scroll: false });
+  }, [sp, router, pathname]);
+
   const selectFromTree = useCallback((id: number) => {
     if (["element", "property"].includes(tree.symbols.find((s) => s.id === id)?.kind ?? "")) changeView("source", id);
     else if (exploring) changeView("explore", id, true);
@@ -264,7 +272,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         </div>
         <div className="atlas-segmented ml-auto shrink-0" role="group" aria-label="工作区模式">
           <button onClick={() => changeView("source")} aria-pressed={!exploring} className={`rounded px-3 py-1.5 ${!exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-slate-100"}`}>源码阅读</button>
-          <button onClick={() => changeView("explore")} aria-pressed={exploring} className={`rounded px-3 py-1.5 ${exploring ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-slate-100"}`}>流程探索</button>
+          <button onClick={() => changeView("explore")} aria-pressed={exploring && !projectOverview} className={`rounded px-3 py-1.5 ${exploring && !projectOverview ? "bg-indigo-500/30 text-indigo-100" : "text-slate-400 hover:text-slate-100"}`}>流程探索</button>
+          <button onClick={openProjectOverview} aria-pressed={projectOverview}>项目总览</button>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
@@ -289,7 +298,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         )}
 
         {projectOverview ? (
-          <ProjectOverview key={project.id} projectId={project.id} projectName={project.name} onExplore={restartTree} />
+          <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} />
         ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">

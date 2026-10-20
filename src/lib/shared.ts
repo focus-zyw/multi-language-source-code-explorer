@@ -11,6 +11,7 @@ export interface SkippedInfo {
 }
 
 export interface ProjectStats {
+  scanTimings?: { decodeMs: number; parseMs: number; resolveMs: number; testLinkMs: number; transactionOtherMs: number; totalMs: number };
   symbols: { function: number; method: number; class: number; test: number; element?: number; property?: number };
   refs: { exact: number; inferred: number; heuristic: number; external: number; unresolved: number };
   testLinks: { exact: number; inferred: number; indirect: number; heuristic: number };
