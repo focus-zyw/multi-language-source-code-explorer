@@ -1,5 +1,6 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql, getTableColumns } from "drizzle-orm";
+import { ensureLearningTables } from "./learning-store";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "@/db";
 import { files, projects, refTargets, refs, symbols, testLinks, symbolExplanations } from "@/db/schema";
@@ -48,7 +49,8 @@ export async function listProjects(): Promise<ProjectListItem[]> {
 }
 
 export async function getProject(id: number): Promise<ProjectInfo | null> {
-  const [r] = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+  await ensureLearningTables(db);
+  const [r] = await db.select({ ...getTableColumns(projects), scanRevision: sql<number>`coalesce((select revision from project_scan_versions where project_id = ${id}), 1)` }).from(projects).where(eq(projects.id, id)).limit(1);
   if (!r) return null;
   return {
     id: r.id,
@@ -62,6 +64,7 @@ export async function getProject(id: number): Promise<ProjectInfo | null> {
     stats: r.stats,
     createdAt: r.createdAt.toISOString(),
     totalBytes: r.totalBytes,
+    scanRevision: r.scanRevision,
     skipped: r.skipped,
     warnings: r.warnings,
   };

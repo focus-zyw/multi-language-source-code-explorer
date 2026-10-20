@@ -17,6 +17,7 @@ export interface ProjectListItem {
 }
 
 export interface ProjectInfo extends ProjectListItem {
+  scanRevision: number;
   totalBytes: number;
   skipped: SkippedInfo;
   warnings: string[];

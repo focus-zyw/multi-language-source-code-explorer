@@ -40,6 +40,14 @@ test("project insights/search isolate projects, preserve dependency confidence, 
     const other = join(temp, "other"); await mkdir(other); await writeFile(join(other, "secret.ts"), "export function isolatedSecret() { return 1; }");
     const second = await json("/api/projects/local", post({ action: "import", path: other }), 201);
     const tree = await json(`/api/projects/${id}/tree`);
+    const foo = tree.symbols.find((symbol) => symbol.name === "a");
+    const learning = await json(`/api/projects/${id}/learning?symbolId=${foo.id}&list=1`);
+    assert.equal(learning.revision, 1); assert.equal(learning.selected.name, "a");
+    const bookmark = await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: foo.id, revision: 1 }));
+    assert.equal((await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: foo.id, revision: 1 }))).id, bookmark.id);
+    assert.equal((await json(`/api/projects/${second.id}/learning?list=1`)).bookmarks.length, 0);
+    await json(`/api/projects/${second.id}/learning?symbolId=${foo.id}`, undefined, 404);
+    await json(`/api/projects/${id}/learning`, { ...post({ action: "bookmark", symbolId: foo.id, revision: 1 }), headers: { "content-type": "application/json", origin: "https://untrusted.invalid" } }, 403);
     let insights = await json(`/api/projects/${id}/insights`);
     assert.ok(insights.dependencies.cycles.some((group) => group.length === 2));
     assert.ok(insights.dependencies.boundaries.some((item) => item.kind === "unresolved"));
@@ -55,6 +63,14 @@ test("project insights/search isolate projects, preserve dependency confidence, 
     assert.ok((await json(`/api/projects/${id}/search?decorator=Get&kind=method`)).total >= 2);
     const bulk = await json(`/api/projects/${id}/search?q=bulk`); assert.equal(bulk.total, 45); assert.equal(bulk.items.length, 40);
     assert.equal((await json(`/api/projects/${id}/search?q=bulk&page=1`)).items.length, 5);
+    const metricSearch = await json(`/api/projects/${id}/search?scope=source&minCc=2&minExactCallers=2&sort=complexity&order=desc`);
+    assert.deepEqual(metricSearch.items.map((item) => item.name), ["a"]);
+    assert.equal(metricSearch.items[0].exactCallers, 2);
+    assert.equal(metricSearch.items[0].params, 1);
+    assert.ok((await json(`/api/projects/${id}/search?sort=params&order=desc`)).items.every((item) => ["function", "method"].includes(item.kind)));
+    assert.equal((await json(`/api/projects/${id}/search?minParams=0&maxParams=0&q=bulk`)).total, 45);
+    await json(`/api/projects/${id}/search?minCc=10&maxCc=1`, undefined, 400);
+    await json(`/api/projects/${id}/search?sort=unknown`, undefined, 400);
     assert.equal((await json(`/api/projects/${id}/search?q=isolatedSecret`)).total, 0);
     assert.equal((await json(`/api/projects/${second.id}/search?q=isolatedSecret`)).total, 1);
     const entries = await json(`/api/projects/${id}/entries`);
@@ -67,8 +83,15 @@ test("project insights/search isolate projects, preserve dependency confidence, 
     await json(`/api/projects/${id}/search?q=${"x".repeat(201)}`, undefined, 400);
     await writeFile(join(source, "a.ts"), "export function a() { return 0; }\n");
     await json(`/api/projects/${id}/rescan`, post({}));
+    const rescanned = await json(`/api/projects/${id}/learning?list=1`);
+    assert.equal(rescanned.revision, 2); assert.equal(rescanned.bookmarks[0].id, bookmark.id);
+    assert.equal(rescanned.bookmarks[0].freshness, "changed");
+    await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: rescanned.bookmarks[0].symbolId, revision: 1 }), 409);
+    const restored = await json(`/api/projects/${id}/learning`, post({ action: "resolve", anchors: [learning.selected] }));
+    assert.equal(restored.anchors[0].symbolId, rescanned.bookmarks[0].symbolId);
     insights = await json(`/api/projects/${id}/insights`); assert.deepEqual(insights.dependencies.cycles, []);
     assert.equal((await json(`/api/projects/${id}/search?deprecated=1`)).total, 0);
+    assert.equal((await json(`/api/projects/${id}/search?minCc=2&minExactCallers=2`)).total, 0);
     const nextTree = await json(`/api/projects/${id}/tree`); assert.notEqual(tree.symbols.find((symbol) => symbol.name === "a").id, nextTree.symbols.find((symbol) => symbol.name === "a").id);
     // Restore the cycle for optional browser inspection, still in this temporary DB.
     await writeFile(join(source, "a.ts"), 'import { b } from "./api/b";\n/** @deprecated use another entry */\nexport function a(flag: boolean) { if (flag) return b(); return 0; }\nexport function many() { a(true); a(false); }\n');

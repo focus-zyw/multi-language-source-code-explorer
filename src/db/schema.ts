@@ -20,6 +20,19 @@ export const projects = sqliteTable("projects", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).default(sql`(cast(strftime('%s', 'now') as integer) * 1000)`).notNull(),
 });
 
+// Additive tables also initialized for existing local databases by learning-store.
+export const projectScanVersions = sqliteTable("project_scan_versions", {
+  projectId: integer("project_id").primaryKey().references(() => projects.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull().default(1),
+});
+export const learningBookmarks = sqliteTable("learning_bookmarks", {
+  id: text("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  anchorKey: text("anchor_key").notNull(),
+  anchor: text("anchor").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [uniqueIndex("learning_bookmarks_owner_idx").on(t.projectId, t.anchorKey)]);
+
 export const files = sqliteTable(
   "files",
   {

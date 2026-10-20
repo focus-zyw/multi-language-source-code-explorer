@@ -20,6 +20,8 @@ import { QuestionsPanel } from "./panels/QuestionsPanel";
 import type { QuestionQuote } from "@/lib/question-types";
 import { ReadingShortcutHint } from "./ReadingZoom";
 import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
+import { mergeWorkspaceSearch, searchFromWorkspace } from "@/lib/symbol-search";
+import { LearningControls } from "./LearningControls";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
 import { VarsPanel } from "./panels/VarsPanel";
@@ -64,10 +66,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const cache = useRef(new Map<number, SymbolDetail>());
 
-  const [tab, setTab] = useState<Tab>("explain");
+  const [tab, setTab] = useState<Tab>(() => ["explain", "questions", "refs", "tests", "flow", "vars"].includes(sp.get("panel") ?? "") ? sp.get("panel") as Tab : "explain");
   const [codeQuote, setCodeQuote] = useState<{ forId: number; quote: QuestionQuote } | null>(null);
   const [questionQuote, setQuestionQuote] = useState<{ forId: number; quote: QuestionQuote | null } | null>(null);
-  const [mode, setMode] = useState<"method" | "file">("method");
+  const [mode, setMode] = useState<"method" | "file">(() => sp.get("codeMode") === "file" ? "file" : "method");
   const [showSidebar, setShowSidebar] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [highlight, setHighlight] = useState<Scoped<ViewerHighlight> | null>(null);
@@ -167,6 +169,11 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const changeOverviewSection = useCallback((section: OverviewSection) => {
     const params = new URLSearchParams(sp.toString());
     params.set("view", "explore"); params.set("root", "project"); params.set("overview", section);
+    router.push(`${pathname}?${params}`, { scroll: false });
+  }, [sp, router, pathname]);
+
+  const changeSearch = useCallback((request: string) => {
+    const params = mergeWorkspaceSearch(new URLSearchParams(sp.toString()), request);
     router.push(`${pathname}?${params}`, { scroll: false });
   }, [sp, router, pathname]);
 
@@ -276,6 +283,15 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
           <button onClick={openProjectOverview} aria-pressed={projectOverview}>项目总览</button>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <LearningControls projectId={project.id} createdAt={project.createdAt} revision={project.scanRevision} selectedId={selectedId} rootId={rootId}
+            overview={projectOverview} view={exploring ? "explore" : "source"} direction={direction} tab={tab} mode={mode}
+            onRestore={(selected, root, position, reload) => {
+              const params = new URLSearchParams(sp.toString()); params.set("s", String(selected));
+              if (position?.view === "explore" && root !== null) { params.set("view", "explore"); params.set("root", String(root)); params.set("direction", position.direction); }
+              else { params.delete("view"); params.delete("root"); params.delete("direction"); }
+              if (position) { setTab(position.tab as Tab); setMode(position.mode); params.set("panel", position.tab); params.set("codeMode", position.mode); }
+              if (reload) window.location.assign(`${pathname}?${params}`); else router.push(`${pathname}?${params}`, { scroll: false });
+            }} />
           <ThemeToggle />
           <span
             className={`hidden rounded-full px-2.5 py-1 text-xs ring-1 ring-inset sm:inline ${ai.configured ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/40" : "bg-slate-800 text-slate-400 ring-slate-700"}`}
@@ -298,7 +314,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         )}
 
         {projectOverview ? (
-          <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} />
+          <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} searchRequest={searchFromWorkspace(new URLSearchParams(sp.toString()))} onSearch={changeSearch} />
         ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">

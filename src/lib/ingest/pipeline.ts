@@ -10,6 +10,7 @@ import { ImportError, LIMITS } from "./rules";
 import type { RawFile } from "./zip";
 import { snapshotExplanations, matchExplanations } from "@/lib/rescan-explanations";
 import type { ExplanationFingerprintInput, FingerprintTarget } from "@/lib/explanation-fingerprint";
+import { ensureLearningTables, advanceScanRevision } from "@/lib/learning-store";
 
 export interface IngestArgs {
   name: string;
@@ -63,6 +64,7 @@ async function insertChunked<T>(rows: T[], cols: number, fn: (chunk: T[]) => Pro
 }
 
 export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
+  await ensureLearningTables(db);
   const startedAt = performance.now();
   const skipped: SkipRecord[] = [...args.skipped];
   const warnings = [...args.warnings];
@@ -212,6 +214,8 @@ export async function ingestProject(args: IngestArgs): Promise<IngestResult> {
       const [project] = await tx.insert(schema.projects).values(projectValues).returning({ id: schema.projects.id });
       projectId = project.id;
     }
+
+    await advanceScanRevision(tx, projectId, args.replaceProjectId !== undefined);
 
     await insertChunked(units, Object.keys(getTableColumns(schema.files)).length, (chunk) =>
       tx.insert(schema.files).values(
