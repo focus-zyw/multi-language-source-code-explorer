@@ -1,8 +1,8 @@
-import type { ExplanationEvent, ExplanationResponse } from "./ai-types.ts";
+import type { ChatRetryState, ExplanationEvent, ExplanationResponse } from "./ai-types.ts";
 
 /** Decode UTF-8/JSON across arbitrary network chunks; a closed stream alone is not success. */
 export async function readExplanation(response: Response, onProgress: (event: Extract<ExplanationEvent, { type: "progress" }>) => void,
-  onDelta?: (text: string) => void): Promise<ExplanationResponse> {
+  onDelta?: (text: string) => void, onRetry?: (retry: ChatRetryState) => void): Promise<ExplanationResponse> {
   if (!response.headers.get("content-type")?.includes("application/x-ndjson")) {
     const body = await response.json().catch(() => ({}));
     if (!response.ok || !body.explanation) throw new Error(body.error ?? `生成失败（HTTP ${response.status}）`);
@@ -18,6 +18,7 @@ export async function readExplanation(response: Response, onProgress: (event: Ex
     const event = JSON.parse(text) as ExplanationEvent;
     if (event.type === "progress") onProgress(event);
     else if (event.type === "delta") onDelta?.(event.text);
+    else if (event.type === "retry") onRetry?.(event.retry);
     else if (event.type === "result") result = event.result;
     else if (event.type === "error") throw new Error(event.error);
   };

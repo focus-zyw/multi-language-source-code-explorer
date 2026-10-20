@@ -1,4 +1,4 @@
-import type { AgentPhase, ExplanationBackend, ExplanationResponse } from "./ai-types.ts";
+import type { AgentPhase, ChatRetryState, ExplanationBackend, ExplanationResponse } from "./ai-types.ts";
 import { readExplanation } from "./read-explanation.ts";
 
 export interface ExplanationTaskInput {
@@ -20,6 +20,7 @@ export interface ExplanationTask extends ExplanationTaskInput {
   result?: ExplanationResponse;
   /** 流式生成中的部分正文；结束后清空，避免与已保存结果不一致。 */
   partial?: string;
+  retry?: ChatRetryState;
   dismissed: boolean;
 }
 
@@ -51,7 +52,7 @@ export function createExplanationTasks(fetcher: typeof fetch = (...args) => fetc
     running.delete(key);
     active.controller.abort();
     active.discardPartial();
-    publish({ ...task, loading: false, phase: "cancelled", error: null, partial: undefined });
+    publish({ ...task, loading: false, phase: "cancelled", error: null, partial: undefined, retry: undefined });
   };
   const start = (input: ExplanationTaskInput, onComplete?: (result: ExplanationResponse) => void): Promise<void> => {
     const key = explanationTaskKey(input.projectId, input.symbolId, input.backend);
@@ -92,15 +93,21 @@ export function createExplanationTasks(fetcher: typeof fetch = (...args) => fetc
         const result = await readExplanation(response, (event) => {
           if (!controller.signal.aborted) publish({ ...get(key)!, phase: event.phase, timeoutMs: event.timeoutMs });
         }, (text) => {
-          if (!controller.signal.aborted) appendPartial(text);
+          if (!controller.signal.aborted) {
+            const current = get(key)!;
+            if (current.retry) publish({ ...current, retry: undefined });
+            appendPartial(text);
+          }
+        }, (retry) => {
+          if (!controller.signal.aborted) publish({ ...get(key)!, retry });
         });
         if (controller.signal.aborted) return;
         discardPartial();
-        publish({ ...get(key)!, loading: false, phase: "finishing", partial: undefined, result, durationMs: result.durationMs ?? Date.now() - task.startedAt });
+        publish({ ...get(key)!, loading: false, phase: "finishing", partial: undefined, retry: undefined, result, durationMs: result.durationMs ?? Date.now() - task.startedAt });
         onComplete?.(result);
       } catch (error) {
         discardPartial();
-        if (!controller.signal.aborted) publish({ ...get(key)!, loading: false, partial: undefined, error: error instanceof Error ? error.message : "生成失败" });
+        if (!controller.signal.aborted) publish({ ...get(key)!, loading: false, partial: undefined, retry: undefined, error: error instanceof Error ? error.message : "生成失败" });
       } finally {
         discardPartial();
         if (running.get(key)?.controller === controller) running.delete(key);

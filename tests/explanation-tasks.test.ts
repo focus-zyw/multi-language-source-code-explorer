@@ -2,10 +2,37 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createExplanationTasks, explanationTaskKey } from "../src/lib/explanation-tasks.ts";
 import type { ExplanationResponse } from "../src/lib/ai-types.ts";
+import { retryStatus } from "../src/lib/retry-status.ts";
 
 const input = { projectId: 1, symbolId: 2, symbolName: "double", backend: "agent" as const, force: false };
 const key = explanationTaskKey(1, 2, "agent");
 const result: ExplanationResponse = { explanation: "double 的讲解", backend: "agent", model: "fixture", generatedAt: "2026-10-17T00:00:00.000Z", cached: false };
+
+test("retry status remains visible after unsubscribing and stop clears the wait", async () => {
+  let streamController!: ReadableStreamDefaultController<Uint8Array>;
+  let signal!: AbortSignal;
+  const store = createExplanationTasks(async (_url, init) => {
+    signal = init!.signal!;
+    return new Response(new ReadableStream({ start(controller) {
+      streamController = controller;
+      signal.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")), { once: true });
+    } }), { headers: { "content-type": "application/x-ndjson" } });
+  });
+  const pending = store.start(input);
+  await Promise.resolve();
+  const unmount = store.subscribe(() => {});
+  unmount();
+  const retry = { attempt: 2, maxAttempts: 3, reason: "rate-limit" as const, retryAt: Date.now() + 60_000 };
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "retry", retry }) + "\n"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(store.get(key)?.retry, retry);
+  assert.match(retryStatus(retry, retry.retryAt - 59_500), /等待限流解除 · 约 60 秒后重试 · 第 2\/3 次尝试/);
+  assert.match(retryStatus({ ...retry, retryAt: null }), /正在重试/);
+  store.stop(key);
+  await pending;
+  assert.equal(signal.aborted, true);
+  assert.equal(store.get(key)?.retry, undefined);
+});
 function harness() {
   const requests: { url: string; signal: AbortSignal; resolve: (response: Response) => void; body: unknown }[] = [];
   const store = createExplanationTasks((url, init) => new Promise((resolve) => {

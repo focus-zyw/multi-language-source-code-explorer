@@ -1,9 +1,9 @@
 import { AiError } from "./ai-error.ts";
-import type { AgentPhase, ExplanationEvent, ExplanationResponse } from "./ai-types.ts";
+import type { AgentPhase, ChatRetryState, ExplanationEvent, ExplanationResponse } from "./ai-types.ts";
 
 /** `timeoutMs` 只在本机 Agent 有单次进程上限时提供；模型 API 重试后没有单一上限。 */
 export function explanationStream(signal: AbortSignal, timeoutMs: number | undefined,
-  execute: (signal: AbortSignal, progress: (phase: AgentPhase) => void, delta: (text: string) => void) => Promise<ExplanationResponse>) {
+  execute: (signal: AbortSignal, progress: (phase: AgentPhase) => void, delta: (text: string) => void, retry: (state: ChatRetryState) => void) => Promise<ExplanationResponse>) {
   const abort = new AbortController();
   const onAbort = () => abort.abort();
   signal.addEventListener("abort", onAbort, { once: true });
@@ -20,7 +20,8 @@ export function explanationStream(signal: AbortSignal, timeoutMs: number | undef
       };
       void execute(abort.signal,
         (phase) => send({ type: "progress", phase, timeoutMs, elapsedMs: Date.now() - started }),
-        (text) => send({ type: "delta", text }))
+        (text) => send({ type: "delta", text }),
+        (retry) => send({ type: "retry", retry }))
         .then((result) => send({ type: "result", result }))
         .catch((error: unknown) => send({ type: "error", error: error instanceof AiError ? error.message : "生成讲解失败，请重试" }))
         .finally(() => {

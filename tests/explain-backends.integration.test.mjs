@@ -19,12 +19,20 @@ test("production app supports both explanation backends with independent persist
   let startup = "";
   let app;
   let holdNextApi;
+  let nextApiFailure = null;
+  let retryNextApi = false;
   const api = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     const payload = JSON.parse(body);
     assert.ok(payload.messages.some((message) => message.content.includes("double")));
     apiCalls++;
+    if (retryNextApi) {
+      retryNextApi = false;
+      res.writeHead(429, { "retry-after": "1" });
+      res.end("private rate-limit diagnostic");
+      return;
+    }
     if (holdNextApi) {
       const held = holdNextApi;
       holdNextApi = null;
@@ -35,8 +43,15 @@ test("production app supports both explanation backends with independent persist
     // The app always asks for SSE, so the fixture mirrors a provider that streams.
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.write('data: {"choices":[{"delta":{"content":"## 一句话概述\\nAPI 测试"}}]}\n\n');
+    if (nextApiFailure) {
+      const reason = nextApiFailure;
+      nextApiFailure = null;
+      if (reason === "length") res.write('data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n');
+      res.end();
+      return;
+    }
     res.write('data: {"choices":[{"delta":{"content":"讲解：输入乘以二。"}}]}\n\n');
-    res.end("data: [DONE]\n\n");
+    res.end('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
   });
   try {
     await new Promise((resolve) => api.listen(0, "127.0.0.1", resolve));
@@ -122,6 +137,46 @@ test("production app supports both explanation backends with independent persist
     assert.equal(apiEvents.at(-1).type, "result");
     assert.ok(apiEvents.at(-1).result.explanation.includes("API 测试讲解"));
     assert.equal(JSON.stringify(apiEvents).includes("local-fixture-only"), false);
+
+    // Incomplete upstream responses must not replace the saved explanation in either envelope.
+    const beforeTruncation = (await (await fetch(path)).json()).ai.explanations.api;
+    for (const failure of ["eof", "length"]) {
+      for (const stream of [false, true]) {
+        nextApiFailure = failure;
+        const expectedError = failure === "eof" ? /提前结束/ : /长度上限/;
+        const beforeCalls = apiCalls;
+        const incomplete = await fetch(`${path}/explain`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ backend: "api", force: true, stream }),
+        });
+        if (stream) {
+          const events = (await incomplete.text()).trim().split("\n").map((line) => JSON.parse(line));
+          assert.equal(events.some((event) => event.type === "delta"), true);
+          assert.equal(events.some((event) => event.type === "result"), false);
+          assert.equal(events.at(-1).type, "error");
+          assert.match(events.at(-1).error, expectedError);
+        } else {
+          assert.equal(incomplete.status, 502);
+          assert.match((await incomplete.json()).error, expectedError);
+        }
+        assert.equal(apiCalls, beforeCalls + 1);
+        assert.deepEqual((await (await fetch(path)).json()).ai.explanations.api, beforeTruncation);
+      }
+    }
+
+    retryNextApi = true;
+    const retried = await fetch(`${path}/explain`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "api", force: true, stream: true }),
+    });
+    const retryEvents = (await retried.text()).trim().split("\n").map((line) => JSON.parse(line));
+    const retries = retryEvents.filter((event) => event.type === "retry");
+    assert.equal(retries.length, 2);
+    assert.equal(retries[0].retry.reason, "rate-limit");
+    assert.ok(retries[0].retry.retryAt > 0);
+    assert.equal(retries[1].retry.retryAt, null);
+    assert.equal(retryEvents.at(-1).type, "result");
+    assert.equal(JSON.stringify(retryEvents).includes("private"), false);
 
     // A rescan replaces symbol IDs but retains explanations whose content fingerprint matches.
     const sourceDir = join(temp, "source");

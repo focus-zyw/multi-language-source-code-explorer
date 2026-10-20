@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SymbolDetail } from "@/lib/api-types";
 import type { AgentPhase, ExplanationBackend, ExplanationResult } from "@/lib/ai-types";
 import { explanationTaskKey, explanationTasks } from "@/lib/explanation-tasks";
+import { retryStatus } from "@/lib/retry-status";
 import { Chip, KindIcon, kindLabel } from "../Badges";
 import { Markdown } from "../Markdown";
 import { ReadingZoom } from "../ReadingZoom";
@@ -60,7 +61,7 @@ export function ExplainPanel({ projectId, detail, onNavigate, onAiUpdate, onAsk 
   };
   const stop = () => explanationTasks.stop(taskKey);
   const elapsedSeconds = currentRequest ? Math.max(0, Math.floor((now - currentRequest.startedAt) / 1000)) : 0;
-  const statusLabel = partial ? "正在接收讲解"
+  const statusLabel = currentRequest?.retry ? retryStatus(currentRequest.retry, now) : partial ? "正在接收讲解"
     : backend === "agent" && currentRequest && currentRequest.phase !== "cancelled" ? PHASE_LABEL[currentRequest.phase]
     : "正在等待模型返回讲解";
 

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { symbolExplanations } from "@/db/schema";
 import { AiError, EXPLAIN_SYSTEM_PROMPT, buildExplainPrompt, completeChat, getAiConfig, getAiPublicStatus, explanationConfigKey } from "@/lib/ai";
 import { completeAgent, getAgentConfig } from "@/lib/agent";
-import type { AgentPhase, ExplanationBackend, ExplanationResponse } from "@/lib/ai-types";
+import type { AgentPhase, ChatRetryState, ExplanationBackend, ExplanationResponse } from "@/lib/ai-types";
 import { explanationStream } from "@/lib/explanation-stream";
 import { getSymbolForExplain, parseId } from "@/lib/queries";
 import { explanationContentKey, fingerprintExplanation, storedExplanationFingerprint } from "@/lib/explanation-fingerprint";
@@ -85,7 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return `方法内第 ${c.line - sym.startLine + 1} 行 ${c.calleeText} → ${c.target ?? "（无项目内目标）"} [${label}]`;
   });
 
-  const execute = async (signal: AbortSignal, onProgress?: (phase: AgentPhase) => void, onDelta?: (text: string) => void): Promise<ExplanationResponse> => {
+  const execute = async (signal: AbortSignal, onProgress?: (phase: AgentPhase) => void, onDelta?: (text: string) => void, onRetry?: (retry: ChatRetryState) => void): Promise<ExplanationResponse> => {
     const started = Date.now();
     const phases: Partial<Record<AgentPhase, number>> = {};
     let completed = false;
@@ -102,8 +102,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
     const explanation = agentConfig
       ? await completeAgent(agentConfig, EXPLAIN_SYSTEM_PROMPT, prompt, signal, (phase) => { phases[phase] = Date.now() - started; onProgress?.(phase); })
-      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt, signal, onDelta && {
-          onDelta: (text) => { phases.responding ??= Date.now() - started; onDelta(text); },
+      : await completeChat(apiConfig!, EXPLAIN_SYSTEM_PROMPT, prompt, signal, {
+          onDelta: (text) => { phases.responding ??= Date.now() - started; onDelta?.(text); },
+          onRetry,
         });
     if (signal.aborted) throw new AiError("讲解已取消", 499);
     const model = agentConfig ? `Codex · ${agentConfig.model ?? "默认模型"}` : apiConfig!.model;

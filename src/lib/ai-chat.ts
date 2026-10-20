@@ -1,4 +1,5 @@
 import { AiError } from "./ai-error.ts";
+import type { ChatRetryState } from "./ai-types.ts";
 
 /**
  * 模型请求的传输层：SSE 流式解析 + 有限重试。
@@ -7,7 +8,7 @@ import { AiError } from "./ai-error.ts";
  * 也不依赖 `server-only`，调用方负责传入已校验的配置。
  *
  * 环境变量（均按次调用读取）：
- *   AI_TIMEOUT_MS       单次请求总超时，默认 120000，范围 5000–600000
+ *   AI_TIMEOUT_MS       等待响应头 / 非流式请求总超时，默认 120000，范围 5000–600000
  *   AI_IDLE_TIMEOUT_MS  两个数据块之间的最长等待，默认 60000，范围 1000–300000
  *   AI_RETRY_ATTEMPTS   总尝试次数，默认 3，范围 1–5
  */
@@ -22,6 +23,7 @@ export interface ChatConfig {
 export interface ChatOptions {
   /** 收到增量文本时调用；一旦调用过就不再重试，避免重复内容。 */
   onDelta?: (chunk: string) => void;
+  onRetry?: (state: ChatRetryState) => void;
   /** 覆盖 `AI_RETRY_ATTEMPTS`，主要用于测试。 */
   maxAttempts?: number;
 }
@@ -38,12 +40,14 @@ const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 /** 内部信号：交给重试循环决定是否再试一次，永不直接暴露给调用方。 */
 class RetryableFailure extends Error {
   // 参数属性写法不被 Node 的类型剥离支持，这里显式声明字段。
-  status: number | null;
-  retryAfterMs: number | null;
-  constructor(status: number | null, retryAfterMs: number | null) {
+  retryDeadline: number | null;
+  reason: ChatRetryState["reason"];
+  failure: AiError;
+  constructor(status: number | null, retryDeadline: number | null, failure?: AiError) {
     super("retryable");
-    this.status = status;
-    this.retryAfterMs = retryAfterMs;
+    this.retryDeadline = retryDeadline;
+    this.reason = status === 429 ? "rate-limit" : status !== null ? "server" : failure?.status === 504 ? "timeout" : "network";
+    this.failure = failure ?? (status !== null ? httpFailure(status) : new AiError("无法连接模型服务，请检查网络与 AI_BASE_URL"));
   }
 }
 
@@ -52,11 +56,19 @@ function numberFromEnv(name: string, fallback: number, min: number, max: number)
   return Number.isFinite(value) && value > 0 ? Math.min(max, Math.max(min, value)) : fallback;
 }
 
-function retryAfterMs(value: string | null): number | null {
+function retryDeadline(value: string | null): number | null {
   if (!value) return null;
-  const seconds = Number(value);
-  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
-  return Number.isFinite(ms) ? Math.min(MAX_RETRY_DELAY_MS, Math.max(0, ms)) : null;
+  const trimmed = value.trim();
+  const ms = /^\d+$/.test(trimmed) ? Number(trimmed) * 1000 : Date.parse(trimmed) - Date.now();
+  // 服务端要求的等待时间独立于本地退避上限；从收到响应头时开始计时。
+  return Number.isFinite(ms) ? performance.now() + Math.max(0, ms) : null;
+}
+
+async function waitUntil(deadline: number, signal?: AbortSignal): Promise<void> {
+  while (deadline > performance.now()) {
+    await sleep(Math.min(deadline - performance.now(), 2_147_483_647), signal);
+  }
+  if (signal?.aborted) throw new AiError("讲解已取消", 499);
 }
 
 function backoffMs(attempt: number): number {
@@ -100,11 +112,25 @@ function requestFor(cfg: ChatConfig, system: string, user: string): { url: strin
 type StreamPayload = {
   error?: { message?: string };
   type?: string;
-  delta?: { type?: string; text?: string };
+  delta?: { type?: string; text?: string; stop_reason?: string | null };
   content_block?: { text?: string };
-  choices?: { delta?: { content?: unknown }; message?: { content?: unknown } }[];
+  choices?: { delta?: { content?: unknown }; message?: { content?: unknown }; finish_reason?: string | null }[];
   content?: { type: string; text?: string }[];
+  stop_reason?: string | null;
 };
+
+/** 完成标记只代表传输结束，显式的截断/拒绝/工具请求不能作为完整讲解保存。 */
+function assertCompleteReason(provider: ChatConfig["provider"], payload: StreamPayload) {
+  const reason = provider === "anthropic" ? payload.stop_reason ?? payload.delta?.stop_reason : payload.choices?.[0]?.finish_reason;
+  // 保留不提供结束原因的兼容端点；只校验上游明确给出的原因。
+  if (reason == null) return;
+  const successful = provider === "anthropic" ? ["end_turn", "stop_sequence"] : ["stop"];
+  if (successful.includes(reason)) return;
+  if (["length", "max_tokens", "model_context_window_exceeded"].includes(reason)) {
+    throw new AiError("模型输出达到长度上限，讲解未完整生成，请重试或调整模型配置", 502);
+  }
+  throw new AiError("模型未正常完成讲解，请重试或调整模型配置", 502);
+}
 
 function textOf(value: unknown): string {
   if (typeof value === "string") return value;
@@ -116,6 +142,7 @@ function textOf(value: unknown): string {
 function deltaOf(provider: ChatConfig["provider"], payload: StreamPayload): string | null {
   if (payload.error) throw new AiError("模型服务返回了错误，请检查模型配置与额度");
   if (payload.type === "error") throw new AiError("模型服务返回了错误，请检查模型配置与额度");
+  assertCompleteReason(provider, payload);
   if (provider === "anthropic") {
     if (payload.type === "content_block_delta" && payload.delta?.type === "text_delta") return payload.delta.text ?? "";
     if (payload.type === "content_block_start") return payload.content_block?.text || null;
@@ -136,26 +163,29 @@ async function readStream(
   let buffer = "";
   let data: string[] = [];
   let text = "";
+  let completed = false;
   const dispatch = () => {
     const payload = data.join("\n");
     data = [];
-    if (!payload || payload === "[DONE]") return;
+    if (!payload) return;
+    if (provider === "openai" && payload === "[DONE]") { completed = true; return; }
     let json: StreamPayload;
     try { json = JSON.parse(payload) as StreamPayload; }
     catch { throw new AiError("模型返回了无法解析的流式响应"); }
     const chunk = deltaOf(provider, json);
+    if (provider === "anthropic" && json.type === "message_stop") { completed = true; return; }
     if (chunk === null) return;
     text += chunk;
     onDelta(chunk);
   };
   try {
-    for (;;) {
+    while (!completed) {
       const { value, done } = await reader.read();
       if (done) break;
       touch();
       buffer += decoder.decode(value, { stream: true });
       let index: number;
-      while ((index = buffer.indexOf("\n")) >= 0) {
+      while (!completed && (index = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, index).replace(/\r$/, "");
         buffer = buffer.slice(index + 1);
         if (line === "") { dispatch(); continue; }
@@ -164,10 +194,13 @@ async function readStream(
         if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
       }
     }
-    buffer += decoder.decode();
-    const tail = buffer.replace(/\r$/, "");
-    if (tail.startsWith("data:")) data.push(tail.slice(5).replace(/^ /, ""));
-    dispatch();
+    if (!completed) {
+      buffer += decoder.decode();
+      const tail = buffer.replace(/\r$/, "");
+      if (tail.startsWith("data:")) data.push(tail.slice(5).replace(/^ /, ""));
+      dispatch();
+    }
+    if (!completed) throw new AiError("模型响应提前结束，未收到完整讲解，请重试", 502);
   } finally {
     await reader.cancel().catch(() => {});
     reader.releaseLock();
@@ -196,25 +229,27 @@ async function attemptChat(cfg: ChatConfig, system: string, user: string, outer:
     if (idle) clearTimeout(idle);
     idle = setTimeout(() => { timedOut = true; controller.abort(); }, idleMs);
   };
-  touch();
   try {
     const { url, headers, body } = requestFor(cfg, system, user);
     const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: controller.signal });
     if (!res.ok) {
+      const advisedDeadline = retryDeadline(res.headers.get("retry-after"));
       // 详细错误仅写服务端日志，且不包含请求头；返回给前端的信息不含上游原文
       const detail = await res.text().catch(() => "");
       console.error(`[ai] upstream error ${res.status}: ${detail.slice(0, 300).split(cfg.apiKey).join("***")}`);
-      if (RETRYABLE_STATUS.has(res.status)) throw new RetryableFailure(res.status, retryAfterMs(res.headers.get("retry-after")));
+      if (RETRYABLE_STATUS.has(res.status)) throw new RetryableFailure(res.status, advisedDeadline);
       throw httpFailure(res.status);
     }
-    touch();
     if (res.headers.get("content-type")?.includes("text/event-stream") && res.body) {
+      clearTimeout(overall);
+      touch();
       const streamed = await readStream(res.body, cfg.provider, onDelta, touch);
       if (!streamed.trim()) throw new AiError("模型返回了空内容");
       return streamed.trim();
     }
     // 部分兼容端点或代理会忽略 stream，直接返回完整 JSON。
     const json = (await res.json()) as StreamPayload;
+    assertCompleteReason(cfg.provider, json);
     const text = cfg.provider === "anthropic"
       ? (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("")
       : textOf(json.choices?.[0]?.message?.content);
@@ -223,7 +258,7 @@ async function attemptChat(cfg: ChatConfig, system: string, user: string, outer:
     return text.trim();
   } catch (error) {
     if (outer?.aborted) throw new AiError("讲解已取消", 499);
-    if (timedOut) throw new AiError("模型请求超时", 504);
+    if (timedOut) throw new RetryableFailure(null, null, new AiError("模型请求超时", 504));
     if (error instanceof AiError || error instanceof RetryableFailure) throw error;
     console.error("[ai] request failed:", error instanceof Error ? error.message.split(cfg.apiKey).join("***") : "unknown");
     // undici 把连接失败与流中断都表现为 TypeError；其余异常来自调用方回调，不应被当作网络问题重试。
@@ -246,10 +281,13 @@ export async function completeChat(cfg: ChatConfig, system: string, user: string
       // 已经输出过正文就不能重试，否则用户会看到重复内容。
       if (!(error instanceof RetryableFailure)) throw error;
       if (emitted || signal?.aborted || attempt >= attempts) {
-        if (error.status !== null) throw httpFailure(error.status);
-        throw new AiError("无法连接模型服务，请检查网络与 AI_BASE_URL");
+        throw error.failure;
       }
-      await sleep(error.retryAfterMs ?? backoffMs(attempt), signal);
+      const deadline = error.retryDeadline ?? performance.now() + backoffMs(attempt);
+      const retry = { attempt: attempt + 1, maxAttempts: attempts, reason: error.reason };
+      options.onRetry?.({ ...retry, retryAt: Date.now() + Math.max(0, deadline - performance.now()) });
+      await waitUntil(deadline, signal);
+      options.onRetry?.({ ...retry, retryAt: null });
     }
   }
 }
