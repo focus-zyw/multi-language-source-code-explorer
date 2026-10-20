@@ -20,6 +20,9 @@ test("agent uses stdin, disables shell tools, filters credentials and cleans its
     assert.ok(result.args.includes("read-only"));
     assert.ok(result.args.includes("--ignore-user-config"));
     assert.ok(result.args.includes("features.shell_tool=false"));
+    const lastIndex = result.args.indexOf("--output-last-message");
+    assert.ok(lastIndex >= 0);
+    assert.ok(result.args[lastIndex + 1].startsWith(result.cwd));
     assert.equal(result.leakedKey, false);
     assert.equal(existsSync(result.cwd), false);
   } finally {
@@ -76,6 +79,27 @@ test("agent returns only final text from fragmented JSONL and reports safe lifec
   assert.equal(result, "最终讲解");
   assert.deepEqual(phases, ["starting", "running", "responding", "finishing"]);
   assert.ok(agentArguments(config()).includes("--json"));
+});
+
+test("agent recovers the final text from the message file when item events are dropped", async () => {
+  assert.equal(await completeAgent(config("file-only"), "system", "source"), "文件最终讲解");
+});
+
+test("agent prefers the message file over streamed items", async () => {
+  assert.equal(await completeAgent(config("file-and-events"), "system", "source"), "文件最终讲解");
+});
+
+test("agent still rejects an empty or oversized message file", async () => {
+  await assert.rejects(completeAgent(config("file-empty"), "system", "source"), /空内容/);
+  await assert.rejects(completeAgent(config("file-large"), "system", "source"), /超过上限/);
+});
+
+test("agent stops on a stream-level error event without disclosing diagnostics", async () => {
+  await assert.rejects(completeAgent(config("events-error"), "system", "source"), (error: Error) => {
+    assert.match(error.message, /出错/);
+    assert.ok(!error.message.includes("private"));
+    return true;
+  });
 });
 
 test("agent rejects failed and incomplete turns without disclosing diagnostics", async () => {
