@@ -1,9 +1,11 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { getAgentConfig } from "./agent.ts";
-import { AiError } from "./ai-error.ts";
+import type { ChatConfig } from "./ai-chat.ts";
 import type { AiPublicStatus, ExplanationBackend } from "./ai-types";
 export { AiError } from "./ai-error.ts";
+export { completeChat } from "./ai-chat.ts";
+export type { ChatOptions } from "./ai-chat.ts";
 
 /**
  * AI 讲解：模型 API Key 只从服务端环境变量读取，从不返回给前端。
@@ -13,14 +15,10 @@ export { AiError } from "./ai-error.ts";
  *   AI_BASE_URL     OpenAI 兼容接口地址，默认 https://api.openai.com/v1
  *   AI_MODEL        模型名，默认 gpt-4o-mini（Anthropic 默认 claude-3-5-haiku-latest）
  *   AI_PROVIDER     openai | anthropic（可省略，仅设置 ANTHROPIC_API_KEY 时自动为 anthropic）
+ *   AI_TIMEOUT_MS / AI_IDLE_TIMEOUT_MS / AI_RETRY_ATTEMPTS  传输层超时与重试，见 ai-chat.ts
  */
 
-export interface AiConfig {
-  provider: "openai" | "anthropic";
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}
+export type AiConfig = ChatConfig;
 
 export function getAiConfig(): AiConfig | null {
   const env = process.env;
@@ -52,65 +50,6 @@ export function explanationConfigKey(backend: ExplanationBackend): string {
     ? [config.provider, config.baseUrl, config.model]
     : [config.command, config.model]);
   return createHash("sha256").update(JSON.stringify([backend, identity])).digest("hex");
-}
-
-export async function completeChat(cfg: AiConfig, system: string, user: string, signal?: AbortSignal): Promise<string> {
-  const controller = new AbortController();
-  const cancel = () => controller.abort();
-  if (signal?.aborted) cancel();
-  else signal?.addEventListener("abort", cancel, { once: true });
-  const timer = setTimeout(() => controller.abort(), 90_000);
-  try {
-    let res: Response;
-    if (cfg.provider === "anthropic") {
-      res = await fetch(`${cfg.baseUrl}/v1/messages`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: cfg.model, max_tokens: 1600, system, messages: [{ role: "user", content: user }] }),
-        signal: controller.signal,
-      });
-    } else {
-      res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({
-          model: cfg.model,
-          temperature: 0.2,
-          max_tokens: 1600,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        }),
-        signal: controller.signal,
-      });
-    }
-    if (!res.ok) {
-      // 详细错误仅写服务端日志，且不包含请求头；返回给前端的信息不含上游原文
-      const body = await res.text().catch(() => "");
-      console.error(`[ai] upstream error ${res.status}: ${body.slice(0, 300).split(cfg.apiKey).join("***")}`);
-      throw new AiError(`模型服务返回错误（HTTP ${res.status}），请检查服务端的 AI_API_KEY / AI_BASE_URL / AI_MODEL 配置`);
-    }
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-      content?: { type: string; text?: string }[];
-    };
-    const text =
-      cfg.provider === "anthropic"
-        ? (json.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("")
-        : json.choices?.[0]?.message?.content ?? "";
-    if (!text.trim()) throw new AiError("模型返回了空内容");
-    return text.trim();
-  } catch (e) {
-    if (signal?.aborted) throw new AiError("讲解已取消", 499);
-    if (e instanceof AiError) throw e;
-    if (e instanceof Error && e.name === "AbortError") throw new AiError("模型请求超时", 504);
-    console.error("[ai] request failed:", e instanceof Error ? e.message.split(cfg.apiKey).join("***") : "unknown");
-    throw new AiError("无法连接模型服务，请检查网络与 AI_BASE_URL");
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", cancel);
-  }
 }
 
 export { EXPLAIN_SYSTEM_PROMPT, buildExplainPrompt } from "./explain-prompt.ts";
