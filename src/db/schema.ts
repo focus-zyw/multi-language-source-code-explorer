@@ -33,6 +33,13 @@ export const learningBookmarks = sqliteTable("learning_bookmarks", {
   createdAt: integer("created_at").notNull(),
 }, (t) => [uniqueIndex("learning_bookmarks_owner_idx").on(t.projectId, t.anchorKey)]);
 
+export const learningNotes = sqliteTable("learning_notes", {
+  id: text("id").primaryKey(), projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  title: text("title").notNull(), body: text("body").notNull(), tags: text("tags").notNull(), status: text("status").notNull(),
+  version: integer("version").notNull(), anchor: text("anchor"), quote: text("quote"), deletedAt: integer("deleted_at"),
+  createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("learning_notes_project_idx").on(t.projectId, t.deletedAt, t.updatedAt)]);
+
 export const files = sqliteTable(
   "files",
   {

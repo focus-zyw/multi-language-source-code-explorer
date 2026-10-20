@@ -32,7 +32,7 @@ export function readReadingPosition(text: string | null, projectCreatedAt: strin
     if (value.version !== 1 || value.projectCreatedAt !== projectCreatedAt || !Number.isSafeInteger(value.revision) || value.revision < 1 ||
       !isLearningAnchor(value.selected) || value.root !== null && !isLearningAnchor(value.root) ||
       !["source", "explore"].includes(value.view) || !["incoming", "outgoing"].includes(value.direction) ||
-      !["explain", "questions", "refs", "tests", "flow", "vars"].includes(value.tab) || !["method", "file"].includes(value.mode)) return null;
+      !["explain", "questions", "refs", "tests", "flow", "vars", "notes"].includes(value.tab) || !["method", "file"].includes(value.mode)) return null;
     return value as ReadingPosition;
   } catch { return null; }
 }

@@ -22,6 +22,7 @@ import { ReadingShortcutHint } from "./ReadingZoom";
 import { LANGUAGE_SHORT_LABELS } from "@/lib/languages";
 import { mergeWorkspaceSearch, searchFromWorkspace } from "@/lib/symbol-search";
 import { LearningControls } from "./LearningControls";
+import { NotesPanel } from "./NotesPanel";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
 import { VarsPanel } from "./panels/VarsPanel";
@@ -38,7 +39,7 @@ const CallTreeExplorer = dynamic(() => import("./CallTreeExplorer"), {
   loading: () => <div className="p-8 text-center text-sm text-slate-500">正在加载流程探索…</div>,
 });
 
-type Tab = "explain" | "questions" | "refs" | "tests" | "flow" | "vars";
+type Tab = "explain" | "questions" | "refs" | "tests" | "flow" | "vars" | "notes";
 type Scoped<T> = T & { forId: number | null };
 interface AnalysisState {
   id: number | null;
@@ -58,7 +59,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const rootId = rootParam && /^\d{1,9}$/.test(rootParam) ? Number(rootParam) : null;
   const projectOverview = exploring && (!rootParam || rootParam === "project");
   const overviewParam = sp.get("overview");
-  const overviewSection: OverviewSection = overviewParam === "dependencies" || overviewParam === "learning" || overviewParam === "search" ? overviewParam : "entries";
+  const overviewSection: OverviewSection = overviewParam === "dependencies" || overviewParam === "learning" || overviewParam === "search" || overviewParam === "notes" ? overviewParam : "entries";
   const direction: CallTreeDirection = sp.get("direction") === "incoming" ? "incoming" : "outgoing";
 
   const [detail, setDetail] = useState<SymbolDetail | null>(null);
@@ -66,7 +67,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const cache = useRef(new Map<number, SymbolDetail>());
 
-  const [tab, setTab] = useState<Tab>(() => ["explain", "questions", "refs", "tests", "flow", "vars"].includes(sp.get("panel") ?? "") ? sp.get("panel") as Tab : "explain");
+  const [tab, setTab] = useState<Tab>(() => ["explain", "questions", "refs", "tests", "flow", "vars", "notes"].includes(sp.get("panel") ?? "") ? sp.get("panel") as Tab : "explain");
+  const [noteQuote, setNoteQuote] = useState<{ forId: number; text: string } | null>(null);
   const [codeQuote, setCodeQuote] = useState<{ forId: number; quote: QuestionQuote } | null>(null);
   const [questionQuote, setQuestionQuote] = useState<{ forId: number; quote: QuestionQuote | null } | null>(null);
   const [mode, setMode] = useState<"method" | "file">(() => sp.get("codeMode") === "file" ? "file" : "method");
@@ -243,15 +245,24 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   }, [rootId, tree.symbols, fileById]);
 
   const hl = highlight && highlight.forId === selectedId ? highlight : null;
+  const openNoteSource = (id: number, start: number | null, end: number | null, revision: number) => {
+    if (revision !== project.scanRevision) {
+      const params = new URLSearchParams(sp.toString()); params.set("s", String(id)); params.delete("view"); params.set("codeMode", "file"); params.set("panel", "notes");
+      window.location.assign(`${pathname}?${params}`); return;
+    }
+    changeView("source", id); setMode("file");
+    if (start !== null && end !== null) setHighlight({ forId: id, startLine: start, endLine: end });
+  };
   const note = navNote && navNote.forId === selectedId ? navNote : null;
   const focus = focusRef && focusRef.forId === selectedId ? focusRef.id : null;
 
   const structural = ["element", "property"].includes(shown?.symbol.kind ?? "");
-  const activeTab = structural && tab !== "questions" ? "explain" : tab;
+  const activeTab = structural && tab !== "questions" && tab !== "notes" ? "explain" : tab;
   const ask = (quote: QuestionQuote | null) => { if (shown) setQuestionQuote({ forId: shown.symbol.id, quote }); setTab("questions"); };
   const tabs: { key: Tab; label: string; count?: string }[] = [
     { key: "explain", label: "讲解" },
     { key: "questions", label: "问答" },
+    { key: "notes", label: "笔记" },
     ...(!structural ? [{ key: "refs" as const, label: "引用", count: shown ? `${shown.outgoing.length}·${shown.incoming.length}` : undefined },
     { key: "tests" as const, label: "关联测试", count: shown ? String(new Set(shown.tests.map((t) => t.otherSymbolId)).size) : undefined },
     { key: "flow" as const, label: "流程图" },
@@ -314,7 +325,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         )}
 
         {projectOverview ? (
-          <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} searchRequest={searchFromWorkspace(new URLSearchParams(sp.toString()))} onSearch={changeSearch} />
+          <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} searchRequest={searchFromWorkspace(new URLSearchParams(sp.toString()))} onSearch={changeSearch} createdAt={project.createdAt} revision={project.scanRevision} onNoteSource={openNoteSource} />
         ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">
@@ -384,6 +395,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                 )}
                 <div className="atlas-segmented shrink-0" role="group" aria-label="源码范围">
                   <button onMouseDown={(event) => event.preventDefault()} onClick={() => ask(codeQuote && codeQuote.forId === shown?.symbol.id ? codeQuote.quote : null)} disabled={!current} title="选中代码后引用提问；未选中则提问当前方法" className="rounded px-2 py-1 text-indigo-300 hover:bg-slate-800 disabled:opacity-50">问 AI</button>
+                  <button onMouseDown={(event) => event.preventDefault()} disabled={!current} onClick={() => { setNoteQuote(current && codeQuote && codeQuote.forId === current.symbol.id ? { forId: current.symbol.id, text: codeQuote.quote.text } : null); setTab("notes"); }} className="rounded px-2 py-1 text-indigo-300 disabled:opacity-50">记笔记</button>
                   <button onClick={() => setMode("method")} aria-pressed={mode === "method"}>
                     {structural ? "当前节点" : "仅方法"}
                   </button>
@@ -454,6 +466,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               <div className={`min-h-0 flex-1 ${activeTab === "flow" || activeTab === "questions" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
                 {!shown ? (
                   <div className="p-8 text-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
+                ) : activeTab === "notes" ? (
+                  <NotesPanel key={`${project.id}:${shown.symbol.id}`} projectId={project.id} createdAt={project.createdAt} revision={project.scanRevision} symbolId={shown.symbol.id} symbolName={shown.symbol.qualifiedName} quote={noteQuote?.forId === shown.symbol.id ? noteQuote.text : null} onOpen={openNoteSource} />
                 ) : activeTab === "questions" ? (
                   <QuestionsPanel key={`${project.id}:${shown.symbol.id}`} projectId={project.id} detail={shown} quote={questionQuote?.forId === shown.symbol.id ? questionQuote.quote : null} onClearQuote={() => setQuestionQuote(null)} onSource={(id, startLine, endLine) => { changeView("source", id); setMode("file"); setHighlight({ forId: id, startLine, endLine }); }} />
                 ) : activeTab === "explain" ? (

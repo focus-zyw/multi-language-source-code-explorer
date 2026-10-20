@@ -9,6 +9,7 @@ import { join, dirname, resolve, basename } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
+import { randomUUID } from "node:crypto";
 
 test("project insights/search isolate projects, preserve dependency confidence, track rescans and report timings", { skip: process.env.RUN_INSIGHTS_E2E !== "1", timeout: process.env.INSIGHTS_UI_PATH ? 360000 : 120000 }, async () => {
   const temp = await mkdtemp(join(tmpdir(), "atlas-insights-"));
@@ -44,6 +45,13 @@ test("project insights/search isolate projects, preserve dependency confidence, 
     const learning = await json(`/api/projects/${id}/learning?symbolId=${foo.id}&list=1`);
     assert.equal(learning.revision, 1); assert.equal(learning.selected.name, "a");
     const bookmark = await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: foo.id, revision: 1 }));
+    const noteInput = { action: "create", id: randomUUID(), symbolId: foo.id, revision: 1, quote: "return b()", content: { title: "a 的学习笔记", body: "先判断 flag，再调用 b。", tags: ["调用链"], status: "reading" } };
+    const note = await json(`/api/projects/${id}/notes`, post(noteInput));
+    assert.equal((await json(`/api/projects/${id}/notes`, post(noteInput))).id, note.id);
+    assert.equal((await json(`/api/projects/${second.id}/notes`)).total, 0);
+    await json(`/api/projects/${second.id}/notes?noteId=${note.id}`, undefined, 404);
+    await json(`/api/projects/${id}/notes`, post({ action: "update", id: note.id, version: 9, content: noteInput.content }), 409);
+    await json(`/api/projects/${id}/notes`, { ...post(noteInput), headers: { "content-type": "application/json", origin: "https://evil.invalid" } }, 403);
     assert.equal((await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: foo.id, revision: 1 }))).id, bookmark.id);
     assert.equal((await json(`/api/projects/${second.id}/learning?list=1`)).bookmarks.length, 0);
     await json(`/api/projects/${second.id}/learning?symbolId=${foo.id}`, undefined, 404);
@@ -86,6 +94,11 @@ test("project insights/search isolate projects, preserve dependency confidence, 
     const rescanned = await json(`/api/projects/${id}/learning?list=1`);
     assert.equal(rescanned.revision, 2); assert.equal(rescanned.bookmarks[0].id, bookmark.id);
     assert.equal(rescanned.bookmarks[0].freshness, "changed");
+    const oldNote = await json(`/api/projects/${id}/notes?noteId=${note.id}`);
+    assert.equal(oldNote.body, noteInput.content.body); assert.equal(oldNote.resolution.freshness, "changed"); assert.equal(oldNote.quoteStartLine, null);
+    const trashedNote = await json(`/api/projects/${id}/notes`, post({ action: "trash", id: note.id, version: 1 }));
+    assert.equal((await json(`/api/projects/${id}/notes?trash=1`)).total, 1);
+    assert.equal((await json(`/api/projects/${id}/notes`, post({ action: "restore", id: note.id, version: trashedNote.version }))).deletedAt, null);
     await json(`/api/projects/${id}/learning`, post({ action: "bookmark", symbolId: rescanned.bookmarks[0].symbolId, revision: 1 }), 409);
     const restored = await json(`/api/projects/${id}/learning`, post({ action: "resolve", anchors: [learning.selected] }));
     assert.equal(restored.anchors[0].symbolId, rescanned.bookmarks[0].symbolId);

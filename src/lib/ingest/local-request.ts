@@ -11,10 +11,10 @@ export function checkLocalRequest(req: Request): void {
   if (!req.headers.get("content-type")?.includes("application/json")) throw new ImportError("请求需要 application/json", 415);
 }
 
-export async function readLocalBody(req: Request): Promise<Record<string, unknown>> {
+export async function readLocalBody(req: Request, maxBytes = 8192): Promise<Record<string, unknown>> {
   checkLocalRequest(req);
   const length = Number(req.headers.get("content-length") ?? 0);
-  if (length > 8192) throw new ImportError("请求内容过长", 413);
+  if (length > maxBytes) throw new ImportError("请求内容过长", 413);
   const reader = req.body?.getReader();
   if (!reader) throw new ImportError("请求需要 JSON 对象");
   const chunks: Uint8Array[] = [];
@@ -24,7 +24,7 @@ export async function readLocalBody(req: Request): Promise<Record<string, unknow
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 8192) { await reader.cancel(); throw new ImportError("请求内容过长", 413); }
+      if (size > maxBytes) { await reader.cancel(); throw new ImportError("请求内容过长", 413); }
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }
