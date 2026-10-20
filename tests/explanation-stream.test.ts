@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { explanationStream } from "../src/lib/explanation-stream.ts";
 import { readExplanation } from "../src/lib/read-explanation.ts";
 import { AiError } from "../src/lib/ai-error.ts";
-import type { ExplanationResponse } from "../src/lib/ai-types.ts";
+import type { ChatRetryState, ExplanationResponse } from "../src/lib/ai-types.ts";
 
 const result: ExplanationResponse = { explanation: "中文讲解", model: "fixture", generatedAt: null, backend: "agent", cached: false, durationMs: 123 };
 
@@ -40,7 +40,31 @@ test("disconnecting the stream or aborting the request aborts its underlying Age
   }
 });
 
+test("delta events reach the reader in order and JSON replies carry no deltas", async () => {
+  const deltas: string[] = [];
+  const stream = explanationStream(new AbortController().signal, undefined, async (_signal, progress, delta) => {
+    progress("running"); delta("第一段"); delta("第二段"); return result;
+  });
+  assert.deepEqual(await readExplanation(stream, (event) => { assert.equal(event.timeoutMs, undefined); }, (text) => deltas.push(text)), result);
+  assert.deepEqual(deltas, ["第一段", "第二段"]);
+  const fromJson: string[] = [];
+  assert.deepEqual(await readExplanation(Response.json(result), () => {}, (text) => fromJson.push(text)), result);
+  assert.deepEqual(fromJson, []);
+});
+
 test("cached JSON replies and nonstream API errors remain compatible", async () => {
   assert.deepEqual(await readExplanation(Response.json({ ...result, cached: true }), () => {}), { ...result, cached: true });
   await assert.rejects(readExplanation(Response.json({ error: "未配置" }, { status: 503 }), () => {}), /未配置/);
+});
+
+test("safe retry states travel through the stream before the final result", async () => {
+  const waiting: ChatRetryState = { attempt: 2, maxAttempts: 3, reason: "rate-limit", retryAt: Date.now() + 60_000 };
+  const retries: ChatRetryState[] = [];
+  const stream = explanationStream(new AbortController().signal, undefined, async (_signal, _progress, _delta, retry) => {
+    retry(waiting);
+    retry({ ...waiting, retryAt: null });
+    return result;
+  });
+  assert.deepEqual(await readExplanation(stream, () => {}, undefined, (retry) => retries.push(retry)), result);
+  assert.deepEqual(retries, [waiting, { ...waiting, retryAt: null }]);
 });

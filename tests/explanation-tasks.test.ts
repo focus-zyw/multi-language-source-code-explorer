@@ -2,10 +2,37 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createExplanationTasks, explanationTaskKey } from "../src/lib/explanation-tasks.ts";
 import type { ExplanationResponse } from "../src/lib/ai-types.ts";
+import { retryStatus } from "../src/lib/retry-status.ts";
 
 const input = { projectId: 1, symbolId: 2, symbolName: "double", backend: "agent" as const, force: false };
 const key = explanationTaskKey(1, 2, "agent");
 const result: ExplanationResponse = { explanation: "double 的讲解", backend: "agent", model: "fixture", generatedAt: "2026-10-17T00:00:00.000Z", cached: false };
+
+test("retry status remains visible after unsubscribing and stop clears the wait", async () => {
+  let streamController!: ReadableStreamDefaultController<Uint8Array>;
+  let signal!: AbortSignal;
+  const store = createExplanationTasks(async (_url, init) => {
+    signal = init!.signal!;
+    return new Response(new ReadableStream({ start(controller) {
+      streamController = controller;
+      signal.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")), { once: true });
+    } }), { headers: { "content-type": "application/x-ndjson" } });
+  });
+  const pending = store.start(input);
+  await Promise.resolve();
+  const unmount = store.subscribe(() => {});
+  unmount();
+  const retry = { attempt: 2, maxAttempts: 3, reason: "rate-limit" as const, retryAt: Date.now() + 60_000 };
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "retry", retry }) + "\n"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(store.get(key)?.retry, retry);
+  assert.match(retryStatus(retry, retry.retryAt - 59_500), /等待限流解除 · 约 60 秒后重试 · 第 2\/3 次尝试/);
+  assert.match(retryStatus({ ...retry, retryAt: null }), /正在重试/);
+  store.stop(key);
+  await pending;
+  assert.equal(signal.aborted, true);
+  assert.equal(store.get(key)?.retry, undefined);
+});
 function harness() {
   const requests: { url: string; signal: AbortSignal; resolve: (response: Response) => void; body: unknown }[] = [];
   const store = createExplanationTasks((url, init) => new Promise((resolve) => {
@@ -100,11 +127,33 @@ test("progress continues without subscribers, then a remounted view can manually
   unmount();
 });
 
+test("streamed deltas surface as partial text and are cleared once the result arrives", async () => {
+  let streamController!: ReadableStreamDefaultController<Uint8Array>;
+  const bodies: unknown[] = [];
+  const store = createExplanationTasks(async (_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    return new Response(new ReadableStream({ start(controller) { streamController = controller; } }), { headers: { "content-type": "application/x-ndjson" } });
+  });
+  const pending = store.start(input);
+  await Promise.resolve();
+  assert.deepEqual(bodies[0], { force: false, backend: "agent", stream: true });
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "delta", text: "前半" }) + "\n"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.get(key)?.partial, "前半");
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "delta", text: "后半" }) + "\n"));
+  streamController.enqueue(new TextEncoder().encode(JSON.stringify({ type: "result", result }) + "\n"));
+  streamController.close();
+  await pending;
+  assert.equal(store.get(key)?.partial, undefined);
+  assert.deepEqual(store.get(key)?.result, result);
+});
+
 test("API tasks also stop explicitly; dismissing a running task cannot remove its stop control", async () => {
   const { store, requests } = harness();
   const apiKey = explanationTaskKey(1, 2, "api");
   const pending = store.start({ ...input, backend: "api" });
   await Promise.resolve();
+  assert.deepEqual(requests[0].body, { force: false, backend: "api", stream: true });
   store.dismiss(apiKey);
   assert.equal(store.get(apiKey)?.dismissed, false);
   store.stop(apiKey);
