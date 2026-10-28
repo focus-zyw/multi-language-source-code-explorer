@@ -94,16 +94,30 @@ test("agent still rejects an empty or oversized message file", async () => {
   await assert.rejects(completeAgent(config("file-large"), "system", "source"), /超过上限/);
 });
 
-test("agent stops on a stream-level error event without disclosing diagnostics", async () => {
-  await assert.rejects(completeAgent(config("events-error"), "system", "source"), (error: Error) => {
-    assert.match(error.message, /出错/);
-    assert.ok(!error.message.includes("private"));
-    return true;
-  });
+test("agent accepts a recovered turn after a transient error event", async () => {
+  assert.equal(await completeAgent(config("events-recovered"), "system", "source"), "恢复后的最终讲解");
+});
+
+test("agent rejects unrecovered error events without disclosing diagnostics or partial results", async () => {
+  for (const mode of ["events-error-exit", "events-error-partial"]) {
+    await assert.rejects(completeAgent(config(mode), "system", "source"), (error: Error) => {
+      assert.match(error.message, /出错/);
+      assert.ok(!error.message.includes("private"));
+      return true;
+    });
+  }
+});
+
+test("a retrying agent remains cancellable and bounded by the original timeout", async () => {
+  await assert.rejects(completeAgent({ ...config("events-error"), timeoutMs: 500 }, "system", "source"), /超时/);
+  const controller = new AbortController();
+  const pending = completeAgent(config("events-error"), "system", "source", controller.signal);
+  setTimeout(() => controller.abort(), 300);
+  await assert.rejects(pending, /取消/);
 });
 
 test("agent rejects failed and incomplete turns without disclosing diagnostics", async () => {
-  for (const mode of ["events-failed", "events-incomplete"]) {
+  for (const mode of ["events-failed", "events-error-failed", "events-incomplete"]) {
     await assert.rejects(completeAgent(config(mode), "system", "source"), (error: Error) => {
       assert.ok(!error.message.includes("private"));
       assert.match(error.message, /失败|未完成/);

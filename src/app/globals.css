@@ -63,3 +63,20 @@ body {
 .react-flow__attribution {
   display: none;
 }
+
+/* Note code colors follow the existing light/dark palette. No HTML from notes is mounted. */
+.file-note-code .hljs-keyword,
+.file-note-code .hljs-selector-tag { color: var(--atlas-clay); }
+.file-note-code .hljs-string,
+.file-note-code .hljs-regexp { color: var(--atlas-ref-exact); }
+.file-note-code .hljs-number,
+.file-note-code .hljs-literal { color: var(--atlas-ref-inferred); }
+.file-note-code .hljs-comment { color: var(--atlas-muted); font-style: italic; }
+.file-note-code .hljs-title,
+.file-note-code .hljs-built_in { color: var(--atlas-ref-heuristic); }
+
+.file-note-rich { white-space: normal; }
+.file-note-rich img { max-width: 100%; height: auto; }
+.file-note-rich table { border-collapse: collapse; }
+.file-note-rich td, .file-note-rich th { padding: .4rem; border: 1px solid var(--atlas-border); }
+.file-note-rich pre { white-space: pre; overflow: auto; font-family: monospace; }

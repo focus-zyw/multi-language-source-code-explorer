@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>增强复制验收夹具</title>
+<style>
+  body { margin: 24px auto; max-width: 900px; font: 15px/1.6 system-ui; color: #292524; background: #faf8f5; }
+  article { padding: 20px; background: white; margin: 20px 0; border: 1px solid #d8cfc6; }
+  .reply { display: flex; flex-direction: column; }
+  .farm { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+  .farm div { padding: 10px; text-align: center; border-radius: 2px; background: #f9e39b; }
+  .cards { display: flex; flex-direction: row; gap: 8px; }
+  .cards > div { display: flex; flex-direction: column; flex: 1; padding: 16px; text-align: center; border: 1px solid #ddd; border-radius: 12px; }
+  .cards strong { display: block; font-size: 26px; }
+  .best { color: #009b4d; }
+  pre { background: #f2eeea; padding: 12px; white-space: pre; }
+  td, th { border: 1px solid #ccc; padding: 6px; }
+  .source-hidden { display: none; }
+</style>
+<article data-message-author-role="user"><p>用户的问题不能混入回复。</p></article>
+<article><div class="reply" data-message-author-role="assistant" id="sunflower">
+  <h2>向日葵种植笔记</h2>
+  <p>这段正文必须可以继续编辑。</p>
+  <h3>代码</h3>
+  <pre><code class="language-python"># 将地面变成耕地
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(Entities.Sunflower)
+petals = measure()
+while not can_harvest():
+    pass
+harvest()</code></pre>
+  <table><thead><tr><th>代码</th><th>作用</th></tr></thead><tbody>
+    <tr><td><code>get_ground_type()</code></td><td>获取地面类型</td></tr>
+    <tr><td><code>till()</code></td><td>转换耕地</td></tr>
+    <tr><td><code>plant()</code></td><td>种植</td></tr>
+    <tr><td><code>measure()</code></td><td>查询花瓣</td></tr>
+    <tr><td><code>can_harvest()</code></td><td>判断成熟</td></tr>
+    <tr><td><code>harvest()</code></td><td>收割</td></tr>
+  </tbody></table>
+  <p>骨头公式：</p>
+  <span class="katex-display"><span class="katex"><math><semantics><mi>不可重复的视觉公式</mi><annotation class="source-hidden" encoding="application/x-tex">B = L^2</annotation></semantics></math></span></span>
+  <h3>12×12 农场</h3><div class="farm" id="farm"><!-- CELLS --></div>
+  <h3>四株向日葵</h3>
+  <div class="cards" id="cards"><div>第 1 株<strong>12</strong>片花瓣</div><div class="best">第 2 株<strong>15</strong>优先收割</div><div>第 3 株<strong>9</strong>片花瓣</div><div>第 4 株<strong>14</strong>片花瓣</div></div>
+  <h3>图片</h3><img src="/pixel.png" alt="本地测试图片">
+  <ul><li>先扫描<ul><li>记录最大花瓣数</li><li>检查成熟</li></ul></li><li>然后收割</li></ul>
+  <p><a href="https://example.com/source">来源链接</a></p>
+  <p class="source-hidden">隐藏内容不能进入笔记</p>
+  <svg width="10" height="10"><circle cx="5" cy="5" r="4" /></svg>
+  <button>原网页复制按钮不能进入笔记</button>
+</div></article>
+<article><div data-message-author-role="assistant" id="second"><p>第二条独立回复。</p></div></article>
+</html>

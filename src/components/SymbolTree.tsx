@@ -35,7 +35,7 @@ const LANG_DOT: Record<string, string> = { python: "bg-sky-400", javascript: "bg
 
 type Filter = "all" | "source" | "tests";
 
-export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; selectedId: number | null; onSelect: (id: number) => void }) {
+export function SymbolTree({ tree, selectedId, selectedFileId = null, onSelect, onSelectFile }: { tree: TreeData; selectedId: number | null; selectedFileId?: number | null; onSelect: (id: number) => void; onSelectFile?: (id: number) => void }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const dirTree = useMemo(() => buildDirTree(tree.files), [tree.files]);
@@ -171,7 +171,7 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
     );
   };
 
-  const renderFile = (f: TreeFile, depth: number): ReactNode => {
+  const renderFile = (f: TreeFile, depth: number, includeSymbols = true): ReactNode => {
     if (filter === "source" && f.isTest) return null;
     if (filter === "tests" && !f.isTest) return null;
     const open = openFiles.has(f.id);
@@ -179,21 +179,23 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
     const count = symsByFile.get(f.id)?.length ?? 0;
     return (
       <div key={f.id}>
+        <div className="flex items-center" style={{ paddingLeft: 8 + depth * 14 }}>
+        {includeSymbols && <button type="button" onClick={() => toggleFile(f.id)} aria-label={`${open ? "收起" : "展开"}文件 ${f.path}`} aria-expanded={open} className="w-4 shrink-0 py-1 text-xs text-slate-500">{open ? "▾" : "▸"}</button>}
         <button
-          onClick={() => toggleFile(f.id)}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          className="flex w-full items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] text-slate-200 hover:bg-slate-800"
+          onClick={() => { if (onSelectFile) { onSelectFile(f.id); setOpenFiles((previous) => new Set(previous).add(f.id)); } else toggleFile(f.id); }}
+          aria-current={selectedFileId === f.id ? "true" : undefined}
+          className={`atlas-symbol flex min-w-0 flex-1 items-center gap-1.5 rounded py-[3px] pr-2 text-left text-[13px] text-slate-200 hover:bg-slate-800 ${selectedFileId === f.id ? "bg-indigo-500/15 font-semibold" : ""}`}
           title={f.path + (f.hasSyntaxErrors ? "（含语法错误，解析可能不完整）" : "")}
         >
-          <span className="w-3 text-xs text-slate-500">{open ? "▾" : "▸"}</span>
           <span className={`h-2 w-2 shrink-0 rounded-full ${LANG_DOT[f.language] ?? "bg-slate-400"}`} />
           <span className="min-w-0 flex-1 truncate">{f.path.split("/").pop()}</span>
           {f.isTest && <span className="rounded bg-emerald-500/20 px-1 text-xs text-emerald-300">test</span>}
           {f.hasSyntaxErrors && <span className="text-xs text-amber-400" title="含语法错误">⚠</span>}
           <span className="shrink-0 text-xs text-slate-500">{count}</span>
         </button>
-        {open && top.map((s) => renderSym(s, depth + 1))}
-        {open && top.length === 0 && (
+        </div>
+        {includeSymbols && open && top.map((s) => renderSym(s, depth + 1))}
+        {includeSymbols && open && top.length === 0 && (
           <div style={{ paddingLeft: 8 + (depth + 1) * 14 }} className="py-1 text-xs text-slate-500">
             （没有函数/类）
           </div>
@@ -259,8 +261,9 @@ export function SymbolTree({ tree, selectedId, onSelect }: { tree: TreeData; sel
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
         {results ? (
-          results.length ? (
+          results.length || tree.files.some((f) => f.path.toLowerCase().includes(q) && (filter === "all" || (filter === "tests" ? f.isTest : !f.isTest))) ? (
             <>
+              {tree.files.filter((f) => f.path.toLowerCase().includes(q) && (filter === "all" || (filter === "tests" ? f.isTest : !f.isTest))).slice(0, 200).map((f) => renderFile(f, 0, false))}
               {results.map((s) => (
                 <button
                   key={s.id}

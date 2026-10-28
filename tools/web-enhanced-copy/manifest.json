@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Code Atlas 增强复制",
+  "version": "1.0.0",
+  "description": "从 AI 网页复制正文、代码、公式和静态图示，粘贴到 Code Atlas 文件笔记。",
+  "minimum_chrome_version": "120",
+  "permissions": ["activeTab", "scripting", "clipboardWrite"],
+  "action": {
+    "default_title": "Code Atlas 增强复制",
+    "default_popup": "popup.html"
+  }
+}

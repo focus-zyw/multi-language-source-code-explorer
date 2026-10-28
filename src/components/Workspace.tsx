@@ -24,6 +24,7 @@ import { mergeWorkspaceSearch, searchFromWorkspace } from "@/lib/symbol-search";
 import { LearningControls } from "./LearningControls";
 import { restoredReadingParams } from "@/lib/learning-types";
 import { NotesPanel } from "./NotesPanel";
+import { FileNotesWorkspace } from "./FileNotesWorkspace";
 import { RefsPanel } from "./panels/RefsPanel";
 import { TestsPanel } from "./panels/TestsPanel";
 import { VarsPanel } from "./panels/VarsPanel";
@@ -53,8 +54,10 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+  const fileParam = sp.get("f");
+  const selectedFile = fileParam && /^\d{1,9}$/.test(fileParam) ? tree.files.find((file) => file.id === Number(fileParam)) ?? null : null;
   const sParam = sp.get("s");
-  const selectedId = sParam && /^\d{1,9}$/.test(sParam) ? Number(sParam) : null;
+  const selectedId = !selectedFile && sParam && /^\d{1,9}$/.test(sParam) ? Number(sParam) : null;
   const exploring = sp.get("view") === "explore";
   const rootParam = sp.get("root");
   const rootId = rootParam && /^\d{1,9}$/.test(rootParam) ? Number(rootParam) : null;
@@ -142,6 +145,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     (id: number, note?: { text: string; level: ResolutionT }) => {
       setNavNote(note ? { ...note, forId: id } : null);
       const params = new URLSearchParams(sp.toString());
+      params.delete("f");
       params.set("s", String(id));
       if (exploring && rootId !== null) params.set("root", String(rootId));
       router.push(`${pathname}?${params}`, { scroll: false });
@@ -151,6 +155,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
 
   const changeView = useCallback((view: "source" | "explore", id = selectedId, restart = false, nextDirection = direction) => {
     const params = new URLSearchParams(sp.toString());
+    if (id !== null || view === "explore") params.delete("f");
     if (id !== null) params.set("s", String(id));
     if (view === "explore") {
       params.set("view", "explore");
@@ -185,6 +190,12 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     else if (exploring) changeView("explore", id, true);
     else navigate(id);
   }, [exploring, changeView, navigate, tree.symbols]);
+
+  const selectFile = useCallback((id: number) => {
+    const params = new URLSearchParams(sp.toString());
+    params.set("f", String(id)); params.delete("view");
+    router.push(`${pathname}?${params}`, { scroll: false });
+  }, [sp, router, pathname]);
 
   const inspectCall = useCallback((ownerId: number, refId: number) => {
     navigate(ownerId);
@@ -248,7 +259,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const hl = highlight && highlight.forId === selectedId ? highlight : null;
   const openNoteSource = (id: number, start: number | null, end: number | null, revision: number) => {
     if (revision !== project.scanRevision) {
-      const params = new URLSearchParams(sp.toString()); params.set("s", String(id)); params.delete("view"); params.set("codeMode", "file"); params.set("panel", "notes");
+      const params = new URLSearchParams(sp.toString()); params.delete("f"); params.set("s", String(id)); params.delete("view"); params.set("codeMode", "file"); params.set("panel", "notes");
       window.location.assign(`${pathname}?${params}`); return;
     }
     changeView("source", id); setMode("file");
@@ -299,6 +310,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
             overview={projectOverview} view={exploring ? "explore" : "source"} direction={direction} tab={tab} mode={mode}
             onRestore={(selected, root, position, reload) => {
               const params = restoredReadingParams(new URLSearchParams(sp.toString()), selected, root, position);
+              params.delete("f");
               if (position) { setTab(position.tab as Tab); setMode(position.mode); params.set("panel", position.tab); params.set("codeMode", position.mode); }
               if (reload) window.location.assign(`${pathname}?${params}`); else router.push(`${pathname}?${params}`, { scroll: false });
             }} />
@@ -319,12 +331,14 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
       <div className="flex min-h-0 flex-1">
         {showSidebar && (
           <ResizableSidebar>
-            <SymbolTree tree={tree} selectedId={selectedId} onSelect={selectFromTree} />
+            <SymbolTree tree={tree} selectedId={selectedId} selectedFileId={selectedFile?.id ?? null} onSelect={selectFromTree} onSelectFile={selectFile} />
           </ResizableSidebar>
         )}
 
         {projectOverview ? (
           <ProjectHub key={project.id} projectId={project.id} projectName={project.name} section={overviewSection} onSection={changeOverviewSection} onExplore={restartTree} onRead={viewSource} searchRequest={searchFromWorkspace(new URLSearchParams(sp.toString()))} onSearch={changeSearch} createdAt={project.createdAt} revision={project.scanRevision} onNoteSource={openNoteSource} />
+        ) : selectedFile ? (
+          <FileNotesWorkspace key={`${project.id}:${project.createdAt}:${selectedFile.path}`} projectId={project.id} createdAt={project.createdAt} file={selectedFile} revision={project.scanRevision} />
         ) : selectedId === null ? (
           <main className="min-w-0 flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-2xl">

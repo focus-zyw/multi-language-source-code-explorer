@@ -85,8 +85,16 @@ test("local collection rejects relative, missing, file and drive-root paths", as
 test("local requests require localhost, same origin and a bounded JSON object", async () => {
   const request = (url: string, body: string, headers: Record<string, string> = {}) => new Request(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body });
   assert.deepEqual(await readLocalBody(request("http://localhost:3000/api/projects/local", '{"path":"test"}')), { path: "test" });
+  // 本机访问同一端口时，localhost / 127.0.0.1 / [::1] 互为别名，不能因地址写法不同而拒绝。
+  assert.deepEqual(await readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { host: "127.0.0.1:3000" })), {});
+  assert.deepEqual(await readLocalBody(request("http://127.0.0.1:3000/api/projects/local", "{}", { host: "localhost:3000" })), {});
+  assert.deepEqual(await readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { host: "[::1]:3000", origin: "http://127.0.0.1:3000" })), {});
   await assert.rejects(readLocalBody(request("http://example.org/api/projects/local", "{}")), /本机访问/);
+  await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { host: "example.org:3000" })), /请求地址不匹配/);
+  await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { host: "localhost:4000" })), /请求地址不匹配/);
+  await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { host: "localhost:3000/api" })), /请求地址不匹配/);
   await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { origin: "https://example.org" })), /跨站/);
+  await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { origin: "http://localhost:4000" })), /跨站/);
   await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { "sec-fetch-site": "cross-site" })), /跨站/);
   await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "{}", { "content-type": "text/plain" })), /application\/json/);
   await assert.rejects(readLocalBody(request("http://localhost:3000/api/projects/local", "null")), /JSON 对象/);

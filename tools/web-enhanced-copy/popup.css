@@ -1,0 +1,15 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { width: 300px; margin: 0; padding: 18px; background: #faf8f5; color: #302a26; font-size: 13px; line-height: 1.6; }
+h1 { font-size: 18px; margin: 0 0 6px; }
+p { margin: 0 0 14px; }
+button { display: block; width: 100%; padding: 9px 12px; margin-bottom: 9px; border: 1px solid #c8bdb3; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+#replies { background: #925c42; border-color: #925c42; color: #fff; }
+button:focus-visible { outline: 2px solid #925c42; outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: wait; }
+#status { margin-top: 14px; overflow-wrap: anywhere; }
+.hint { color: #75675e; font-size: 12px; margin-bottom: 0; }
+@media (prefers-color-scheme: dark) {
+  body { background: #272320; color: #f0e9e3; }
+  button { border-color: #746457; }
+  .hint { color: #c1b2a6; }
+}

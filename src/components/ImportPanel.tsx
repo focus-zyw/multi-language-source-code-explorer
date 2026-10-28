@@ -2,16 +2,11 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IGNORED_DIRS, LIMITS, classifyPath, commonRoot, normalizeEntryPath } from "@/lib/ingest/rules";
+import { LIMITS } from "@/lib/ingest/rules";
 import { SKIP_REASON_LABELS } from "@/lib/shared";
 import type { LocalFolderListing } from "@/lib/api-types";
 import { LocalFolderPicker } from "./LocalFolderPicker";
 import { LANGUAGE_LABELS } from "@/lib/languages";
-
-interface FolderItem {
-  file: File;
-  path: string;
-}
 
 interface LocalPreview {
   sourcePath: string;
@@ -22,61 +17,6 @@ interface LocalPreview {
   skipped: Record<string, number>;
 }
 
-type Picked =
-  | { kind: "zip"; file: File }
-  | { kind: "folder"; label: string; items: FolderItem[]; skipped: Record<string, number>; totalBytes: number };
-
-function bump(m: Record<string, number>, k: string) {
-  m[k] = (m[k] ?? 0) + 1;
-}
-
-/** 与服务端相同的规则做预过滤，减少上传量；服务端会强制重新校验 */
-function prefilter(raw: FolderItem[], extraSkipped: Record<string, number> = {}): Picked & { kind: "folder" } {
-  const skipped: Record<string, number> = { ...extraSkipped };
-  const valid: FolderItem[] = [];
-  for (const it of raw) {
-    const c = normalizeEntryPath(it.path);
-    if (!c.ok) bump(skipped, c.reason);
-    else valid.push({ file: it.file, path: c.path });
-  }
-  const root = commonRoot(valid.map((v) => v.path));
-  const items: FolderItem[] = [];
-  let totalBytes = 0;
-  for (const v of valid) {
-    const p = root ? v.path.slice(root.length + 1) : v.path;
-    const reason = classifyPath(p);
-    if (reason) {
-      bump(skipped, reason);
-      continue;
-    }
-    if (v.file.size > LIMITS.maxFileBytes) {
-      bump(skipped, "too-large");
-      continue;
-    }
-    items.push({ file: v.file, path: v.path });
-    totalBytes += v.file.size;
-  }
-  return { kind: "folder", label: root ?? "文件夹", items, skipped, totalBytes };
-}
-
-async function walkEntry(entry: FileSystemEntry, prefix: string, out: FolderItem[], skipped: Record<string, number>): Promise<void> {
-  if (entry.isFile) {
-    const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej));
-    out.push({ file, path: prefix + entry.name });
-  } else if (entry.isDirectory) {
-    if (IGNORED_DIRS.has(entry.name)) {
-      bump(skipped, "ignored-dir");
-      return;
-    }
-    const reader = (entry as FileSystemDirectoryEntry).createReader();
-    for (;;) {
-      const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
-      if (!batch.length) break;
-      for (const e of batch) await walkEntry(e, `${prefix}${entry.name}/`, out, skipped);
-    }
-  }
-}
-
 function fmtBytes(n: number) {
   if (n > 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
   if (n > 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -85,17 +25,16 @@ function fmtBytes(n: number) {
 
 export function ImportPanel() {
   const router = useRouter();
-  const [mode, setMode] = useState<"local" | "upload">("local");
+  const [mode, setMode] = useState<"local" | "zip">("local");
   const [localPath, setLocalPath] = useState("");
   const [localPreview, setLocalPreview] = useState<LocalPreview | null>(null);
   const [folderPicker, setFolderPicker] = useState<LocalFolderListing | null>(null);
   const localPending = useRef(false);
-  const [picked, setPicked] = useState<Picked | null>(null);
+  const [zipFile, setZipFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const folderRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
 
   const localAction = async (action: "preview" | "import", selectedPath?: string) => {
@@ -137,63 +76,35 @@ export function ImportPanel() {
     } finally { localPending.current = false; setBusy(null); }
   };
 
-  const onFolder = (list: FileList | null) => {
-    if (!list || !list.length) return;
-    setError(null);
-    const raw: FolderItem[] = Array.from(list).map((f) => ({ file: f, path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name }));
-    setPicked(prefilter(raw));
-  };
-
   const onZip = (list: FileList | null) => {
     const f = list?.[0];
     if (!f) return;
     setError(null);
-    if (!/\.zip$/i.test(f.name)) return setError("请选择 .zip 文件");
+    if (!/\.zip$/i.test(f.name)) return setError("请选择 .zip 文件；文件夹请切换到「本地路径」选择");
     if (f.size > LIMITS.maxZipBytes) return setError("ZIP 超过 100MB 上限");
-    setPicked({ kind: "zip", file: f });
+    setZipFile(f);
   };
 
-  const onDrop = async (e: React.DragEvent) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
     setError(null);
-    const items = Array.from(e.dataTransfer.items ?? []);
-    const entries = items.map((i) => i.webkitGetAsEntry?.() ?? null).filter((x): x is FileSystemEntry => x !== null);
-    if (entries.length === 1 && entries[0].isFile && /\.zip$/i.test(entries[0].name)) {
-      return onZip(e.dataTransfer.files);
+    const entries = Array.from(e.dataTransfer.items ?? []).map((i) => i.webkitGetAsEntry?.() ?? null);
+    if (entries.some((entry) => entry?.isDirectory)) {
+      return setError("拖入文件夹无法取得本机绝对路径，请切换到「本地路径」用「选择文件夹」选择");
     }
-    if (!entries.length) return setError("无法读取拖入的内容，请使用下方按钮选择");
-    setBusy("正在读取文件夹…");
-    try {
-      const out: FolderItem[] = [];
-      const skipped: Record<string, number> = {};
-      for (const en of entries) await walkEntry(en, "", out, skipped);
-      setPicked(prefilter(out, skipped));
-    } catch {
-      setError("读取拖入的文件夹失败");
-    } finally {
-      setBusy(null);
-    }
+    onZip(e.dataTransfer.files);
   };
 
-  const submit = async () => {
-    if (!picked) return;
+  const submitZip = async () => {
+    if (!zipFile) return;
     setError(null);
     setBusy("正在上传并解析（大型项目可能需要几十秒）…");
     try {
       const fd = new FormData();
       if (name.trim()) fd.set("name", name.trim());
-      if (picked.kind === "zip") {
-        fd.set("mode", "zip");
-        fd.set("file", picked.file);
-      } else {
-        if (!picked.items.length) throw new Error("没有可导入的源码文件");
-        if (picked.totalBytes > LIMITS.maxUploadBytes) throw new Error("源码总量超过上传上限");
-        fd.set("mode", "folder");
-        fd.set("paths", JSON.stringify(picked.items.map((i) => i.path)));
-        fd.set("clientSkipped", JSON.stringify(picked.skipped));
-        for (const it of picked.items) fd.append("files", it.file, it.file.name);
-      }
+      fd.set("mode", "zip");
+      fd.set("file", zipFile);
       const res = await fetch("/api/projects", { method: "POST", body: fd });
       const json = (await res.json().catch(() => ({}))) as { id?: number; error?: string };
       if (!res.ok || !json.id) throw new Error(json.error ?? `导入失败（HTTP ${res.status}）`);
@@ -203,8 +114,6 @@ export function ImportPanel() {
       setBusy(null);
     }
   };
-
-  const skippedEntries = picked?.kind === "folder" ? Object.entries(picked.skipped).filter(([, v]) => v > 0) : [];
 
   return (
     <div className="atlas-surface p-5 sm:p-6">
@@ -217,8 +126,8 @@ export function ImportPanel() {
       <div className="atlas-segmented mt-5" role="group" aria-label="导入方式">
         <button type="button" disabled={!!busy} aria-pressed={mode === "local"} onClick={() => { setMode("local"); setError(null); }}
           className="font-medium disabled:opacity-50">本地路径</button>
-        <button type="button" disabled={!!busy} aria-pressed={mode === "upload"} onClick={() => { setMode("upload"); setError(null); }}
-          className="font-medium disabled:opacity-50">上传文件夹 / ZIP</button>
+        <button type="button" disabled={!!busy} aria-pressed={mode === "zip"} onClick={() => { setMode("zip"); setError(null); }}
+          className="font-medium disabled:opacity-50">上传 ZIP</button>
       </div>
 
       {mode === "local" && <div className="mt-4 space-y-3 rounded-xl bg-slate-950/40 p-4">
@@ -256,7 +165,7 @@ export function ImportPanel() {
         </div>}
       </div>}
 
-      {mode === "upload" && <div
+      {mode === "zip" && <div
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
@@ -265,37 +174,21 @@ export function ImportPanel() {
         onDrop={onDrop}
         className={`mt-4 rounded-xl border-2 border-dashed p-6 text-center transition ${dragging ? "border-indigo-400 bg-indigo-500/10" : "border-slate-700 bg-slate-950/40"}`}
       >
-        <p className="text-sm text-slate-300">把项目文件夹或 .zip 拖到这里</p>
+        <p className="text-sm text-slate-300">把 .zip 拖到这里</p>
         <p className="mt-1 text-xs text-slate-500">或</p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
             disabled={!!busy}
-            onClick={() => folderRef.current?.click()}
-            className="atlas-primary px-4 py-2 text-sm"
-          >
-            选择文件夹
-          </button>
-          <button
-            type="button"
-            disabled={!!busy}
             onClick={() => zipRef.current?.click()}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            className="atlas-primary px-4 py-2 text-sm"
           >
             选择 ZIP
           </button>
         </div>
-        <input
-          ref={folderRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            onFolder(e.target.files);
-            e.target.value = "";
-          }}
-          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
-        />
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          文件夹不走上传：切换到「本地路径」点「选择文件夹」，由本机直接读取，速度更快。
+        </p>
         <input
           ref={zipRef}
           type="file"
@@ -308,25 +201,12 @@ export function ImportPanel() {
         />
       </div>}
 
-      {mode === "upload" && picked && (
+      {mode === "zip" && zipFile && (
         <div className="mt-4 space-y-3 rounded-xl bg-slate-950/60 p-4 text-sm">
-          {picked.kind === "zip" ? (
-            <p className="text-slate-200">
-              已选择 ZIP：<span className="font-mono text-indigo-300">{picked.file.name}</span>（{fmtBytes(picked.file.size)}）
-              <span className="block text-xs text-slate-500">解压在服务端内存中完成，并校验路径、条目数与压缩比。</span>
-            </p>
-          ) : (
-            <div className="text-slate-200">
-              已选择文件夹 <span className="font-mono text-indigo-300">{picked.label}</span>：{" "}
-              <b>{picked.items.length}</b> 个受支持源码文件（{fmtBytes(picked.totalBytes)}）
-              {skippedEntries.length > 0 && (
-                <p className="mt-1 text-xs text-slate-500">
-                  已跳过：{skippedEntries.map(([k, v]) => `${SKIP_REASON_LABELS[k]?.split("（")[0] ?? k} ${v}`).join("，")}
-                </p>
-              )}
-              {picked.items.length === 0 && <p className="mt-1 text-xs text-rose-300">未发现受支持的源码文件。</p>}
-            </div>
-          )}
+          <p className="text-slate-200">
+            已选择 ZIP：<span className="font-mono text-indigo-300">{zipFile.name}</span>（{fmtBytes(zipFile.size)}）
+            <span className="block text-xs text-slate-500">解压在服务端内存中完成，并校验路径、条目数与压缩比。</span>
+          </p>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -336,8 +216,8 @@ export function ImportPanel() {
           />
           <button
             type="button"
-            onClick={submit}
-            disabled={!!busy || (picked.kind === "folder" && picked.items.length === 0)}
+            onClick={submitZip}
+            disabled={!!busy}
             className="atlas-primary w-full px-4 py-2.5 text-sm"
           >
             开始导入并分析

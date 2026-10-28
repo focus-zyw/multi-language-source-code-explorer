@@ -86,8 +86,14 @@ test("production app supports both explanation backends with independent persist
     const tree = await (await fetch(`${base}/api/projects/${imported.id}/tree`)).json();
     assert.equal(tree.symbols.length, 1, JSON.stringify(imported));
     const path = `${base}/api/projects/${imported.id}/symbols/${tree.symbols[0].id}`;
+    for (const origin of ["https://evil.example", `http://localhost:${port + 1}`]) {
+      const rejected = await fetch(`${path}/explain`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify({ backend: "api" }) });
+      assert.equal(rejected.status, 403);
+      assert.match((await rejected.json()).error, /跨站/);
+    }
+    assert.equal(apiCalls, 0);
     async function explain(backend, force = false) {
-      const response = await fetch(`${path}/explain`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ backend, force }) });
+      const response = await fetch(`${path}/explain`, { method: "POST", headers: { "content-type": "application/json", origin: `http://127.0.0.1:${port}` }, body: JSON.stringify({ backend, force }) });
       const body = await response.json();
       assert.equal(response.status, 200, JSON.stringify(body));
       return body;

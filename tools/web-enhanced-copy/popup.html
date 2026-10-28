@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Code Atlas 增强复制</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>增强复制</h1>
+  <p>复制网页回复，保留代码换行、公式和静态布局。</p>
+  <button id="replies" type="button">启用回复复制按钮</button>
+  <button id="select" type="button">选择页面区域</button>
+  <button id="close" type="button">关闭本页工具</button>
+  <p id="status" role="status" aria-live="polite">适配 ChatGPT 网页；其他网页可选择区域。</p>
+  <p class="hint">复制后，在 Code Atlas 左侧选中文件，再粘贴到右侧笔记。仅处理你选择的内容。</p>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -104,6 +104,7 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
       let completed = false;
       let bytes = 0;
       let failure: AiError | null = null;
+      let streamError: AiError | null = null;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
       const stop = (error: AiError) => {
         if (failure) return;
@@ -135,8 +136,9 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
           progress("responding");
         } else if (event.type === "turn.completed") { completed = true; progress("finishing"); }
         else if (event.type === "turn.failed") stop(new AiError("Agent 模型请求失败，请检查登录、网络和模型配置", 502));
-        // An unrecoverable stream error; the process may still exit 0 with partial or no text.
-        else if (event.type === "error") stop(new AiError("Agent 运行出错，请稍后重试", 502));
+        // exec 的 error 也可能来自正在重试的连接错误；JSONL 未保留 will_retry，
+        // 因此等待最终 turn 状态和退出码，不提前打断 CLI 自身的恢复流程。
+        else if (event.type === "error") streamError = new AiError("Agent 连接或运行出错且未能恢复，请检查网络、登录状态和模型配置后重试", 502);
         // Reasoning, tool payloads and raw errors never reach the UI or application logs.
       };
       child.stdout.on("data", (chunk: string) => {
@@ -166,7 +168,8 @@ export async function completeAgent(cfg: AgentConfig, system: string, user: stri
         const written = await readLastMessage(lastMessagePath);
         if (written.tooLarge) { reject(new AiError("Agent 返回内容超过上限，请缩小讲解范围")); return; }
         const text = written.text || output.trim();
-        if (code !== 0) reject(new AiError("Codex 运行失败，请在终端执行 codex login，并确认 CLI 已更新且可联网", 502));
+        if (streamError && (code !== 0 || !completed || !text)) reject(streamError);
+        else if (code !== 0) reject(new AiError("Codex 运行失败，请在终端执行 codex login，并确认 CLI 已更新且可联网", 502));
         else if (!text) reject(new AiError("Agent 返回了空内容"));
         else if (!completed) reject(new AiError("Agent 分析未完成，请重试", 502));
         else resolve(text);

@@ -10,6 +10,8 @@
 
 ## Code Atlas 的行为
 
+Agent 的 JSONL `error` 事件不单独作为最终失败判据：参考版本的 app-server 会将可重试的 `StreamError` 标为 `will_retry: true`，但 exec 转换为 JSONL 时未保留该字段。应用允许 CLI 在原有超时内自行恢复，只有正常退出、收到 `turn.completed` 且存在最终正文才保存；只有错误或部分正文时仍报安全错误。手动停止和总超时不受重连影响，不向界面传递原始错误消息。
+
 流式响应必须收到对应提供商的完成标记。OpenAI 显式返回的 `finish_reason` 只接受 `stop`；Anthropic 的 `stop_reason` 只接受 `end_turn` 或 `stop_sequence`。空值或缺失字段保留兼容能力；显式的长度截断、过滤、工具请求及未知结束原因报安全错误，不自动重试、不保存部分讲解。直接返回 JSON 的兼容端点也检查结束原因。此规则不校验讲解内容本身的准确性，也不追溯清理历史缓存。
 
 `AI_TIMEOUT_MS` 限制等待响应头的时间，以及非流式响应的总时长；流式响应开始后改用 `AI_IDLE_TIMEOUT_MS`。重试仅发生在尚未收到正文时，且受 `AI_RETRY_ATTEMPTS` 的总尝试次数限制。

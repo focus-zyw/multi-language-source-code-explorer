@@ -40,6 +40,18 @@ export const learningNotes = sqliteTable("learning_notes", {
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("learning_notes_project_idx").on(t.projectId, t.deletedAt, t.updatedAt)]);
 
+// Keyed by project-relative path so rescanning files does not remove their notes.
+export const fileNotes = sqliteTable("file_notes", {
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  path: text("path").notNull(), body: text("body").notNull(), version: integer("version").notNull(),
+}, (t) => [primaryKey({ columns: [t.projectId, t.path] })]);
+
+export const noteMedia = sqliteTable("note_media", {
+  id: text("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), data: text("data").notNull(),
+});
+
 export const learningNoteLinks = sqliteTable("learning_note_links", {
   projectId: integer("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   sourceId: text("source_id").notNull().references(() => learningNotes.id, { onDelete: "cascade" }),

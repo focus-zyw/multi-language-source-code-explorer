@@ -7,6 +7,7 @@ import type { AgentPhase, ChatRetryState, ExplanationBackend, ExplanationRespons
 import { explanationStream } from "@/lib/explanation-stream";
 import { getSymbolForExplain, parseId } from "@/lib/queries";
 import { explanationContentKey, fingerprintExplanation, storedExplanationFingerprint } from "@/lib/explanation-fingerprint";
+import { isSameOriginRequest } from "@/lib/request-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +26,7 @@ function allow(): boolean {
 const MAX_SOURCE_CHARS = 14_000;
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; sid: string }> }) {
-  const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin) return Response.json({ error: "不允许跨站生成讲解" }, { status: 403 });
+  if (!isSameOriginRequest(req)) return Response.json({ error: "不允许跨站生成讲解" }, { status: 403 });
   if (!req.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "请求需要 application/json" }, { status: 415 });
   const p = await params;
   const id = parseId(p.id);
