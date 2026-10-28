@@ -79,3 +79,22 @@ test("Go package imports search all sibling files and preserve external standard
   assert.equal(resolved.refs.find((r) => r.call.name === "Double")?.targets[0].symbolId, 3);
   assert.equal(resolved.refs.find((r) => r.call.name === "Println")?.resolution, "external");
 });
+
+test("Go imported package lookup ignores other directories/languages and preserves ambiguous siblings", async () => {
+  const sources = [
+    ["main.go", 'package main\nimport d "example.org/app/demo"\nfunc main(){ d.Double(2) }'],
+    ["demo/a.go", "package demo\ntype Counter struct {}"],
+    ["demo/z.go", "package demo\nfunc Double(n int) int { return n*2 }"],
+    ["other/double.go", "package demo\nfunc Double(n int) int { return n*3 }"],
+    ["demo/double.js", "function Double(n) { return n*4; }"],
+  ];
+  const files = await Promise.all(sources.map(([path, source], idx) => unit(path, source, idx)));
+  const ids = files.map((file) => file.extract.symbols.map((_, i) => file.idx * 100 + i + 1));
+  const unique = resolveProject(files, ids).refs.find((ref) => ref.fileIdx === 0 && ref.call.name === "Double")!;
+  assert.equal(unique.resolution, "inferred");
+  assert.deepEqual(unique.targets.map((target) => target.symbolId), [ids[2][0]]);
+  const duplicate = await unit("demo/zz.go", "package demo\nfunc Double(n int) int { return n*5 }", files.length);
+  const ambiguous = resolveProject([...files, duplicate], [...ids, [501]]).refs.find((ref) => ref.fileIdx === 0 && ref.call.name === "Double")!;
+  assert.equal(ambiguous.resolution, "unresolved");
+  assert.deepEqual(ambiguous.targets, []);
+});

@@ -108,6 +108,8 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   };
 
   const recs: SymRec[][] = files.map((f) => f.extract.symbols.map((sym) => ({ id: symbolIds[f.idx][sym.localId], fileIdx: f.idx, sym })));
+  const recById = new Map<number, SymRec>();
+  for (const fileRecs of recs) for (const rec of fileRecs) recById.set(rec.id, rec);
   const sameLanguage = (a: number, b: number) => files[a].language === files[b].language || ["javascript", "typescript", "vue"].includes(files[a].language) && ["javascript", "typescript", "vue"].includes(files[b].language);
   const sameGoPackage = (a: number, b: number) => files[a].language === "go" && files[b].language === "go" && dirOf(files[a].path) === dirOf(files[b].path) && !!files[a].extract.moduleName && files[a].extract.moduleName === files[b].extract.moduleName;
   const sameJavaPackage = (a: number, b: number) => files[a].language === "java" && files[b].language === "java" && files[a].extract.moduleName !== undefined && files[a].extract.moduleName === files[b].extract.moduleName;
@@ -216,7 +218,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     const top = fx.top.get(name)?.[0];
     if (top) return { rec: top, level: "exact" };
     if (files[fi].language === "go" || files[fi].language === "java") {
-      const siblings = recs.flat().filter((r) => r.fileIdx !== fi && (sameGoPackage(fi, r.fileIdx) || sameJavaPackage(fi, r.fileIdx)) && r.sym.parentLocalId === null && r.sym.container === null && r.sym.kind !== "test" && r.sym.name === name);
+      const siblings = (globalTop.get(name) ?? []).filter((r) => r.fileIdx !== fi && (sameGoPackage(fi, r.fileIdx) || sameJavaPackage(fi, r.fileIdx)));
       if (siblings.length === 1) return { rec: siblings[0], level: "inferred" };
     }
     if (files[fi].language === "java") {
@@ -589,9 +591,10 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     for (const call of f.extract.calls) {
       let o = resolveCall(f.idx, call);
       if (f.language === "java" && o.targets.length === 1 && o.resolution !== "heuristic") {
-        const picked = recs.flat().find((r) => r.id === o.targets[0].symbolId);
+        const picked = recById.get(o.targets[0].symbolId);
         if (picked?.sym.kind === "method") {
-          const overloads = recs[picked.fileIdx].filter((r) => r.sym.name === picked.sym.name && r.sym.container === picked.sym.container && r.sym.kind === "method");
+          const overloads = (picked.sym.container === null ? recs[picked.fileIdx] : infos[picked.fileIdx].byContainer.get(picked.sym.container)?.get(picked.sym.name) ?? [])
+            .filter((r) => r.sym.name === picked.sym.name && r.sym.container === picked.sym.container && r.sym.kind === "method");
           if (overloads.length > 1) o = { resolution: "heuristic", reason: "存在多个同名重载；尚未进行 Java 参数类型与泛型推导，以下均为候选", targets: overloads.map((r) => target(r, "heuristic", r.sym.signature)) };
           else if (call.kind !== "new") o = { ...o, resolution: "inferred", targets: o.targets.map((t) => ({ ...t, confidence: "inferred", score: 0.75 })) };
         }

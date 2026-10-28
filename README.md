@@ -15,7 +15,7 @@
 
 「结构化搜索」支持名称、路径、类型、语言、注解/装饰器、基类/接口、弃用标记与测试范围，并可组合圈复杂度、源码行数、参数数的上下限和确定调用方数下限。可按文件位置、名称或上述指标排序；指标筛选与排序仅包含函数/方法，类和 HTML/JSON 结构节点不参与。源码行数是方法范围的行数，不是项目净代码量；复杂度也不作为跨语言的质量评分。
 
-搜索结果展示确定、推断与候选调用方数，包含测试中的调用，分别按调用方方法去重；同一调用方可能出现在不同类别，不能直接相加作为总人数或执行次数。筛选、排序、计数和分页由 SQLite 完成，每页 40 项。学习排行下方的「查看全部」会进入相应指标排序的搜索。
+搜索结果展示确定、推断与候选调用方数，包含测试中的调用，分别按调用方方法去重；同一调用方可能出现在不同类别，不能直接相加作为总人数或执行次数。筛选、排序、计数和分页由 SQLite 完成，每页 40 项。普通搜索先分页，再统计当页调用方；按确定调用方数筛选或排序时仍先统计完整候选集。学习排行下方的「查看全部」会进入相应指标排序的搜索。
 
 搜索条件、页码与排序保存在工作区 URL 的 `search.*` 参数中，打开源码后切回搜索或使用浏览器后退可恢复，也可复制链接保存条件。URL 只代表查询条件，不保存历史扫描快照；重新扫描后会对新数据重新查询。当前不支持正则或 `cc>10` 文本查询语法。
 
@@ -303,6 +303,7 @@ tests/                      node:test 测试 + 示例项目 fixtures
 node --test tests/analysis.test.ts        # 解析/解析可信度/测试关联/流程图/变量/路径安全/ZIP 恶意条目
 node --test tests/env-config.test.mjs     # SQLite 默认路径与环境配置优先级
 node --test tests/local-import.test.ts   # 本地目录过滤、路径与请求校验
+node --test tests/symbol-search.test.ts # 结构化搜索、分页与调用方统计两条查询路径
 node --test tests/note-store.test.ts tests/note-transfer.test.ts tests/learning-store.test.ts # 笔记、关联、导入事务与跨扫描身份；内存临时数据库
 node --test tests/file-note-store.test.ts # 文件笔记隔离、追加编辑、版本冲突与重扫保留；内存临时数据库
 node --test tests/file-note-rendering.test.mjs # 真实渲染器：转义公式、来源图标、图片、代码块及原文保护
@@ -329,6 +330,15 @@ npx next typegen && npm exec tsc -- --noEmit && npm run build
 ```
 
 测试使用 Node 22 的原生 TypeScript 类型剥离，分析层模块因此统一使用带 `.ts` 后缀的相对导入。
+
+大项目性能基准（纯内存夹具，不读取用户数据库，不执行导入源码或调用模型）：
+
+```bash
+node --experimental-strip-types tools/benchmark-resolve.ts
+node --experimental-strip-types tools/benchmark-search.ts
+```
+
+解析基准可加 `--compare-ref <本仓库可信的 Git 版本>`，同时比较该版本的完整解析结果与耗时；搜索基准比较当页聚合与语义等价的全量聚合路径。夹具、测量范围与本轮验证记录见[性能优化记录](docs/performance-optimization.md)。
 
 ## 局限（如实说明）
 

@@ -35,30 +35,47 @@ export function buildSearchQueries(projectId: number, input: SymbolSearchInput) 
   for (const key of Object.keys(metricColumns) as (keyof typeof metricColumns)[]) {
     if (input[key] !== null) conditions.push(sql`${sql.identifier(metricColumns[key])} ${sql.raw(key.startsWith("min") ? ">=" : "<=")} ${input[key]}`);
   }
-  const cte = sql`with callers as (
+  // CROSS JOIN keeps the small page as the outer loop, using the existing target index.
+  const callers = (pageOnly: boolean) => sql`callers as (
     select t.target_symbol_id as target,
       count(distinct case when t.confidence = 'exact' then r.owner_symbol_id end) as exactCallers,
       count(distinct case when t.confidence = 'inferred' then r.owner_symbol_id end) as inferredCallers,
       count(distinct case when t.confidence = 'heuristic' then r.owner_symbol_id end) as candidateCallers
-    from ref_targets t inner join refs r on r.id = t.ref_id and r.project_id = ${projectId}
+    from ${pageOnly ? sql`page p cross join ref_targets t on t.target_symbol_id = p.id` : sql`ref_targets t`}
+    inner join refs r on r.id = t.ref_id and r.project_id = ${projectId}
     inner join symbols owner on owner.id = r.owner_symbol_id and owner.project_id = ${projectId}
     where t.project_id = ${projectId} group by t.target_symbol_id
-  ), candidates as (
+  )`;
+  const candidates = (withCallers: boolean) => sql`candidates as (
     select s.id, s.qualified_name as name, f.path, f.language, s.start_line as line, s.kind,
       s.decorators, s.bases, ${deprecated} as deprecated, (s.is_test or f.is_test) as isTest,
       case when s.kind in ('function', 'method') then json_extract(s.metrics, '$.complexity') end as complexity,
       case when s.kind in ('function', 'method') then json_extract(s.metrics, '$.loc') end as loc,
       case when s.kind in ('function', 'method') then json_extract(s.metrics, '$.params') end as params,
-      coalesce(c.exactCallers, 0) as exactCallers, coalesce(c.inferredCallers, 0) as inferredCallers,
-      coalesce(c.candidateCallers, 0) as candidateCallers
+      ${withCallers ? sql`coalesce(c.exactCallers, 0)` : sql`0`} as exactCallers,
+      ${withCallers ? sql`coalesce(c.inferredCallers, 0)` : sql`0`} as inferredCallers,
+      ${withCallers ? sql`coalesce(c.candidateCallers, 0)` : sql`0`} as candidateCallers
     from symbols s inner join files f on f.id = s.file_id and f.project_id = ${projectId}
-    left join callers c on c.target = s.id where s.project_id = ${projectId}
-  ), filtered as (select * from candidates where ${sql.join(conditions, sql` and `)})`;
+    ${withCallers ? sql`left join callers c on c.target = s.id` : sql``} where s.project_id = ${projectId}
+  )`;
+  const filtered = sql`filtered as (select * from candidates where ${sql.join(conditions, sql` and `)})`;
   const sortColumn = sql.identifier(input.sort), direction = sql.raw(input.order === "desc" ? "desc" : "asc");
+  const ordering = sql`${sortColumn} ${direction}, path collate binary asc, line asc, id asc`;
+  const countCallers = input.minExactCallers !== null;
+  const allCallers = countCallers || input.sort === "exactCallers";
   return {
-    count: sql`${cte} select count(*) as total from filtered`,
-    items: sql`${cte} select id, name, path, language, line, kind, decorators, bases, deprecated,
-      complexity, loc, params, exactCallers, inferredCallers, candidateCallers from filtered
-      order by ${sortColumn} ${direction}, path collate binary asc, line asc, id asc limit 40 offset ${input.page * 40}`,
+    count: sql`with ${countCallers ? sql`${callers(false)},` : sql``} ${candidates(countCallers)}, ${filtered}
+      select count(*) as total from filtered`,
+    items: allCallers ? sql`with ${callers(false)}, ${candidates(true)}, ${filtered}
+      select id, name, path, language, line, kind, decorators, bases, deprecated,
+        complexity, loc, params, exactCallers, inferredCallers, candidateCallers from filtered
+      order by ${ordering} limit 40 offset ${input.page * 40}`
+      : sql`with ${candidates(false)}, ${filtered},
+        page as materialized (select * from filtered order by ${ordering} limit 40 offset ${input.page * 40}),
+        ${callers(true)}
+      select p.id, p.name, p.path, p.language, p.line, p.kind, p.decorators, p.bases, p.deprecated,
+        p.complexity, p.loc, p.params, coalesce(c.exactCallers, 0) as exactCallers,
+        coalesce(c.inferredCallers, 0) as inferredCallers, coalesce(c.candidateCallers, 0) as candidateCallers
+      from page p left join callers c on c.target = p.id order by ${ordering}`,
   };
 }

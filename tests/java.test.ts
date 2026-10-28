@@ -11,6 +11,12 @@ import { identifyProjectEntries } from "../src/lib/analysis/project-entries.ts";
 
 const names = ["Base", "MathUtil", "Counter", "CounterTest"];
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/java_app/demo/${name}.java`, import.meta.url), "utf8");
+async function unit(path: string, source: string, idx: number): Promise<FileUnit> {
+  const entry = pluginForPath(path)!;
+  const tree = (await parseSource(entry.grammar, source))!;
+  try { return { idx, path, language: entry.plugin.id, plugin: entry.plugin, isTest: entry.plugin.isTestFile(path), extract: entry.plugin.extract(tree.rootNode, source, path) }; }
+  finally { tree.delete(); }
+}
 async function units(): Promise<FileUnit[]> {
   return Promise.all(names.map(async (name, idx) => {
     const path = `demo/${name}.java`;
@@ -78,4 +84,38 @@ test("Java project overview offers the main method inside its owning class", asy
   const symbols = files.flatMap((f) => f.extract.symbols.map((s) => ({ ...s, id: id++, fileId: f.idx, parentId: s.parentLocalId })));
   const entries = identifyProjectEntries(files.map((f) => ({ id: f.idx, path: f.path, isTest: f.isTest })), symbols, new Set());
   assert.ok(entries.groups.find((g) => g.id === "startup")?.entries.some((e) => e.symbol.name === "Counter.main"));
+});
+
+test("Java overload lookup keeps file/container isolation, declaration order and confidence", async () => {
+  const sources = [
+    ["demo/Worker.java", `package demo;
+      class Worker {
+        Worker() {}
+        int convert(String value) { return 1; }
+        int convert(int value) { return value; }
+        int single() { return 1; }
+      }
+      class Neighbor { int convert(double value) { return 2; } int single() { return 2; } }`],
+    ["demo/Other.java", "package demo; class Other { int convert(int value) { return 3; } int single() { return 3; } }"],
+    ["Caller.java", "import demo.Worker; class Caller { void run() { Worker worker = new Worker(); worker.convert(1); worker.single(); } }"],
+    ["web.js", "class Worker { convert(value) { return value; } single() { return 4; } }"],
+  ];
+  const files = await Promise.all(sources.map(([path, source], idx) => unit(path, source, idx)));
+  const ids = files.map((file) => file.extract.symbols.map((_, i) => file.idx * 100 + i + 1));
+  const refs = resolveProject(files, ids).refs.filter((ref) => ref.fileIdx === 2);
+  const overload = refs.find((ref) => ref.call.name === "convert")!;
+  const expected = files[0].extract.symbols.filter((symbol) => symbol.container === "Worker" && symbol.name === "convert");
+  assert.equal(expected.length, 2);
+  assert.deepEqual(overload.targets.map((target) => target.symbolId), expected.map((symbol) => ids[0][symbol.localId]));
+  assert.deepEqual(overload.targets.map((target) => target.reason), expected.map((symbol) => symbol.signature));
+  assert.equal(overload.resolution, "heuristic");
+  assert.ok(overload.targets.every((target) => target.confidence === "heuristic"));
+  const single = refs.find((ref) => ref.call.name === "single")!;
+  assert.equal(single.resolution, "inferred");
+  assert.deepEqual(single.targets.map((target) => [target.symbolId, target.confidence, target.score]), [
+    [ids[0][files[0].extract.symbols.find((symbol) => symbol.container === "Worker" && symbol.name === "single")!.localId], "inferred", 0.75],
+  ]);
+  const constructor = refs.find((ref) => ref.call.kind === "new")!;
+  assert.equal(constructor.targets.length, 1);
+  assert.equal(constructor.targets[0].symbolId, ids[0][files[0].extract.symbols.find((symbol) => symbol.name === "constructor")!.localId]);
 });

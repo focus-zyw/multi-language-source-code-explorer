@@ -78,6 +78,39 @@ test("callers deduplicate repeated calls, retain confidence buckets and zero cal
   } finally { f.client.close(); }
 });
 
+test("page-local caller counts match full aggregation across filters, sorting and pages", async () => {
+  const f = await fixture(); try {
+    for (let id = 1; id <= 85; id++) await f.add(id, { name: `Service${String(id % 9).padStart(2, "0")}`, cc: id % 5, fileId: id === 3 || id % 7 === 0 ? 2 : 1, doc: id % 3 === 0 ? "@deprecated" : "" });
+    await f.add(90, { kind: "class" });
+    await f.add(91, { project: 2, fileId: 3 });
+    await f.client.executeMultiple(`insert into refs values
+      (1,1,2),(2,1,2),(3,1,3),(4,2,91),(5,1,91),(6,2,2),(7,1,999);
+      insert into ref_targets values
+      (1,1,1,'exact'),(2,1,1,'exact'),(2,1,1,'inferred'),(3,1,1,'exact'),
+      (3,1,1,'heuristic'),(1,1,44,'inferred'),(3,1,44,'heuristic'),
+      (4,2,1,'exact'),(5,1,1,'exact'),(6,1,1,'exact'),(1,2,1,'exact'),(7,1,1,'exact');`);
+    for (const query of [
+      "sort=name", "sort=name&order=desc", "sort=path&order=desc", "sort=complexity&order=desc", "sort=complexity",
+      "scope=tests&sort=loc", "sort=loc&order=desc", "sort=params&order=desc",
+      "deprecated=1&minCc=1&maxCc=4&sort=params", "q=service&path=src",
+    ]) {
+      for (const page of [0, 1, 2, 99]) {
+        const base = `${query}&methodsOnly=1&page=${page}`;
+        assert.deepEqual(await f.search(base), await f.search(`${base}&minExactCallers=0`), base);
+      }
+    }
+    const first = await f.search("q=Service01&methodsOnly=1");
+    const target = first.items.find((item) => item.id === 1);
+    assert.deepEqual([target?.exactCallers, target?.inferredCallers, target?.candidateCallers], [2, 1, 1]);
+    const byCallers = await f.search("sort=exactCallers&order=desc");
+    assert.equal(byCallers.total, 85);
+    assert.equal(byCallers.items[0].id, 1);
+    assert.equal(byCallers.items[0].exactCallers, 2);
+    assert.equal((await f.search("minExactCallers=2")).total, 1);
+    assert.equal((await f.search("minExactCallers=3")).total, 0);
+  } finally { f.client.close(); }
+});
+
 test("validation rejects invalid ranges, enums and unbounded values", () => {
   for (const input of ["kind=interface", "language=unknown", "scope=unknown", "page=-1", "page=1e2", "deprecated=yes", "minCc=-1", "maxLoc=1.1", "minParams=1e2", "minCc=11&maxCc=10", "minLoc=2&maxLoc=1", "sort=id;drop table symbols", "order=sideways", "methodsOnly=yes", "minExactCallers=10000000", `q=${"x".repeat(201)}`]) assert.throws(() => readSymbolSearch(new URLSearchParams(input)), SearchInputError);
 });
