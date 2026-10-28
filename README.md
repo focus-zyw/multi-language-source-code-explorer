@@ -7,6 +7,8 @@
 当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java / Vue 单文件组件 / HTML / JSON**；解析层是语言插件架构，可扩展其他语言。
 所有跨文件关系都带**可信度标注**，猜测不会被伪装成事实；无法解析的项会明确列出。
 
+切换方法或结构节点时，源码与详情只显示当前节点的数据；加载中不会保留上一个节点的可操作面板。详情加载失败后，可点击「重新加载」原地重试。切换节点仅取消旧详情及静态分析的读取，不会停止已经发起的讲解或问答生成。
+
 ## 项目总览与学习导航
 
 工作台顶部「项目总览」提供项目入口、文件依赖和学习导航。文件依赖支持正反向查看、一层邻居逐步追踪、目录聚合及循环组；默认只展示已解析边，可勾选推断目标。导入边不代表方法调用或执行顺序，部分包导入仅定位代表文件。外部与未解析项单独展示，超过 20000 条关系时明确标注截断；局部图最多 61 个节点。
@@ -321,6 +323,8 @@ node --test tests/agent.test.ts          # Agent 进程、超时、取消与凭�
 node --test tests/ai.test.ts             # 模型 API 的流式解析、重试、空闲超时与取消；本地桩服务
 node --test tests/explanation-stream.test.ts # 讲解进度流、分块文本、断流取消与错误处理
 node --test tests/explanation-fingerprint.test.ts # 内容指纹、相对行号与配置隔离
+# 可选浏览器回归：先构建并准备 Playwright；未安装到本项目时可用 PLAYWRIGHT_MODULE 指向其入口
+# PowerShell: $env:RUN_WORKSPACE_SELECTION_UI="1"; node --test tests/workspace-selection-ui.test.mjs
 node --test tests/sqlite.integration.test.mjs # 先运行 npm run dev；验证导入、查询、ID 分配和级联删除
 # 可选真实 Agent 验证（会使用已登录账号的模型用量；先运行 npm run dev）
 # PowerShell: $env:RUN_AGENT_E2E="1"; node --test tests/explain.integration.test.mjs

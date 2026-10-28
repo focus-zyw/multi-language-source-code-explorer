@@ -14,7 +14,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const tree = await getTree(id);
   return (
     <Suspense fallback={<div className="p-8 text-slate-400">加载中…</div>}>
-      <Workspace project={project} tree={tree} ai={getAiPublicStatus()} />
+      <Workspace key={`${project.id}:${project.createdAt}:${project.scanRevision}`} project={project} tree={tree} ai={getAiPublicStatus()} />
     </Suspense>
   );
 }

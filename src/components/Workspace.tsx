@@ -49,6 +49,12 @@ interface AnalysisState {
   error: string | null;
   data: AnalysisResult | null;
 }
+interface DetailState {
+  id: number | null;
+  loading: boolean;
+  error: string | null;
+  data: SymbolDetail | null;
+}
 
 export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: TreeData; ai: AiPublicStatus }) {
   const router = useRouter();
@@ -66,9 +72,8 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
   const overviewSection: OverviewSection = overviewParam === "dependencies" || overviewParam === "learning" || overviewParam === "search" || overviewParam === "notes" ? overviewParam : "entries";
   const direction: CallTreeDirection = sp.get("direction") === "incoming" ? "incoming" : "outgoing";
 
-  const [detail, setDetail] = useState<SymbolDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DetailState>({ id: null, loading: false, error: null, data: null });
+  const [detailAttempt, setDetailAttempt] = useState(0);
   const cache = useRef(new Map<number, SymbolDetail>());
 
   const [tab, setTab] = useState<Tab>(() => ["explain", "questions", "refs", "tests", "flow", "vars", "notes"].includes(sp.get("panel") ?? "") ? sp.get("panel") as Tab : "explain");
@@ -89,28 +94,27 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     if (selectedId === null || projectOverview) return;
     const cached = cache.current.get(selectedId);
     if (cached) {
-      setDetail(cached);
-      setLoadErr(null);
+      setDetail({ id: selectedId, loading: false, error: null, data: cached });
       return;
     }
     const ac = new AbortController();
-    setLoading(true);
-    setLoadErr(null);
+    setDetail({ id: selectedId, loading: true, error: null, data: null });
     fetch(`/api/projects/${project.id}/symbols/${selectedId}`, { signal: ac.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `加载失败（HTTP ${r.status}）`);
         return (await r.json()) as SymbolDetail;
       })
       .then((d) => {
+        if (ac.signal.aborted) return;
         cache.current.set(selectedId, d);
-        setDetail(d);
+        setDetail({ id: selectedId, loading: false, error: null, data: d });
       })
       .catch((e: unknown) => {
-        if (e instanceof Error && e.name !== "AbortError") setLoadErr(e.message);
-      })
-      .finally(() => setLoading(false));
+        if (ac.signal.aborted) return;
+        setDetail({ id: selectedId, loading: false, error: e instanceof Error ? e.message : "详情加载失败，请重试", data: null });
+      });
     return () => ac.abort();
-  }, [selectedId, project.id, projectOverview]);
+  }, [selectedId, project.id, projectOverview, detailAttempt]);
 
   // 流程图 / 变量：切到对应页签时按需分析
   useEffect(() => {
@@ -128,17 +132,22 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
         return (await r.json()) as AnalysisResult;
       })
       .then((d) => {
+        if (ac.signal.aborted) return;
         analysisCache.current.set(selectedId, d);
         setAnalysis({ id: selectedId, loading: false, error: null, data: d });
       })
       .catch((e: unknown) => {
-        if (e instanceof Error && e.name !== "AbortError") setAnalysis({ id: selectedId, loading: false, error: e.message, data: null });
+        if (ac.signal.aborted) return;
+        setAnalysis({ id: selectedId, loading: false, error: e instanceof Error ? e.message : "分析失败，请重试", data: null });
       });
     return () => ac.abort();
   }, [tab, selectedId, project.id, projectOverview]);
 
-  const current = detail && detail.symbol.id === selectedId ? detail : null;
-  const shown = current ?? detail;
+  const detailView = detail.id === selectedId ? detail : { loading: true, error: null, data: null };
+  const current = detailView.data?.symbol.id === selectedId ? detailView.data : null;
+  const shown = current;
+  const loading = detailView.loading;
+  const loadErr = detailView.error;
   const analysisView = analysis.id === selectedId ? analysis : { loading: true, error: null, data: null };
 
   const navigate = useCallback(
@@ -243,7 +252,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
     if (!d) return;
     const next: SymbolDetail = { ...d, ai: { ...d.ai, explanations: { ...d.ai.explanations, [backend]: aiData } } };
     cache.current.set(symbolId, next);
-    setDetail((prev) => (prev && prev.symbol.id === symbolId ? next : prev));
+    setDetail((prev) => (prev.id === symbolId && prev.data?.symbol.id === symbolId ? { ...prev, data: next } : prev));
   }, []);
 
   const quickPicks = useMemo(
@@ -427,8 +436,6 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                   </button>
                 </div>
               )}
-              {loadErr && <div className="shrink-0 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{loadErr}</div>}
-
               <div className={`relative min-h-0 flex-1 ${loading && !current ? "opacity-60" : ""}`}>
                 {shown ? (
                   <CodeViewer
@@ -443,7 +450,7 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
                     onSelection={(selection) => setCodeQuote(selection ? { forId: shown.symbol.id, quote: { kind: "code", ...selection } } : null)}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">当前节点详情加载后显示源码</div>
                 )}
               </div>
 
@@ -478,7 +485,12 @@ export function Workspace({ project, tree, ai }: { project: ProjectInfo; tree: T
               </div>
               <div className={`min-h-0 flex-1 ${activeTab === "flow" || activeTab === "questions" ? "overflow-hidden" : "overflow-y-auto"} ${loading && !current ? "opacity-60" : ""}`}>
                 {!shown ? (
-                  <div className="p-8 text-center text-sm text-slate-500">{loading ? "正在加载…" : (loadErr ?? "")}</div>
+                  <div className="p-8 text-center text-sm text-slate-500">
+                    {loading ? <p role="status">正在加载当前节点详情…</p> : <div role="alert" className="space-y-3">
+                      <p>{loadErr ?? "详情加载失败，请重试"}</p>
+                      <button onClick={() => setDetailAttempt((attempt) => attempt + 1)} className="rounded border border-slate-700 px-3 py-2 text-slate-200 hover:bg-slate-800">重新加载</button>
+                    </div>}
+                  </div>
                 ) : activeTab === "notes" ? (
                   <NotesPanel key={`${project.id}:${shown.symbol.id}`} projectId={project.id} createdAt={project.createdAt} revision={project.scanRevision} symbolId={shown.symbol.id} symbolName={shown.symbol.qualifiedName} quote={noteQuote?.forId === shown.symbol.id ? noteQuote.text : null} onOpen={openNoteSource} />
                 ) : activeTab === "questions" ? (
