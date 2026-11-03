@@ -2,7 +2,7 @@ import type Parser from "web-tree-sitter";
 
 export type SyntaxNode = Parser.SyntaxNode;
 
-export type LanguageId = "python" | "javascript" | "typescript" | "go" | "java" | "vue" | "html" | "json";
+export type LanguageId = "python" | "javascript" | "typescript" | "go" | "java" | "csharp" | "vue" | "html" | "json";
 export type SymbolKind = "function" | "method" | "class" | "test" | "element" | "property";
 
 /** 关系可信度：exact=语法/导入绑定可确定；inferred=基于类型标注/构造推断；heuristic=仅按名称等启发式猜测 */

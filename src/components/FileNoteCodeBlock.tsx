@@ -7,6 +7,7 @@ import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
 import json from "highlight.js/lib/languages/json";
 import java from "highlight.js/lib/languages/java";
+import csharp from "highlight.js/lib/languages/csharp";
 import go from "highlight.js/lib/languages/go";
 import bash from "highlight.js/lib/languages/bash";
 import css from "highlight.js/lib/languages/css";
@@ -15,8 +16,8 @@ import sql from "highlight.js/lib/languages/sql";
 import type { RootContent } from "hast";
 import { codeLanguage, recoverPythonLines } from "@/lib/file-note-rendering";
 
-const highlighter = createLowlight({ python, javascript, typescript, json, java, go, bash, css, xml, sql });
-const labels: Record<string, string> = { python: "Python", py: "Python", javascript: "JavaScript", js: "JavaScript", typescript: "TypeScript", ts: "TypeScript", json: "JSON", java: "Java", go: "Go", bash: "Shell", sh: "Shell", css: "CSS", xml: "HTML / XML", html: "HTML", sql: "SQL", text: "文本" };
+const highlighter = createLowlight({ python, javascript, typescript, json, java, csharp, go, bash, css, xml, sql });
+const labels: Record<string, string> = { python: "Python", py: "Python", javascript: "JavaScript", js: "JavaScript", typescript: "TypeScript", ts: "TypeScript", json: "JSON", java: "Java", csharp: "C#", cs: "C#", go: "Go", bash: "Shell", sh: "Shell", css: "CSS", xml: "HTML / XML", html: "HTML", sql: "SQL", text: "文本" };
 function tokens(nodes: RootContent[], prefix = ""): ReactNode[] {
   return nodes.map((node, index) => node.type === "text" ? node.value : node.type === "element"
     ? <span key={`${prefix}${index}`} className={Array.isArray(node.properties.className) ? node.properties.className.join(" ") : undefined}>{tokens(node.children, `${prefix}${index}-`)}</span> : null);

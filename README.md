@@ -4,7 +4,7 @@
 
 独立的多语言源码学习 Web 应用：**导入源码项目（本地路径、文件夹或 ZIP）→ 浏览函数/方法 → 阅读源码与讲解 → 查看关联测试 → 点击引用跳转 → 单方法流程图、关键变量定义与引用**。
 
-当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java / Vue 单文件组件 / HTML / JSON**；解析层是语言插件架构，可扩展其他语言。
+当前支持 **Python / JavaScript / TypeScript（含 JSX/TSX）/ Go / Java / C# / Vue 单文件组件 / HTML / JSON**；解析层是语言插件架构，可扩展其他语言。
 所有跨文件关系都带**可信度标注**，猜测不会被伪装成事实；无法解析的项会明确列出。
 
 切换方法或结构节点时，源码与详情只显示当前节点的数据；加载中不会保留上一个节点的可操作面板。详情加载失败后，可点击「重新加载」原地重试。切换节点仅取消旧详情及静态分析的读取，不会停止已经发起的讲解或问答生成。
@@ -196,7 +196,7 @@ AI 讲解使用内容指纹保留缓存：重新扫描会匹配方法路径、�
 
 ## 已实现功能
 
-- **导入**：本地路径（应用内选择文件夹、预览 + 手动重新扫描）与 ZIP 上传；自动跳过 `node_modules`、`.git`、`dist/build`、`__pycache__`、虚拟环境、`.d.ts`、压缩产物、二进制/非 UTF-8、超过 1MB 的文件；导入报告页展示被跳过的内容与原因。
+- **导入**：本地路径（应用内选择文件夹、预览 + 手动重新扫描）与 ZIP 上传；自动跳过 `node_modules`、`.git`、`dist/build`、`bin/obj`、`__pycache__`、虚拟环境、`.d.ts`、压缩产物、二进制/非 UTF-8、超过 1MB 的文件；导入报告页展示被跳过的内容与原因。
 - **真实语法解析**：Tree-sitter（WASM）按语言插件解析，记录函数/方法/类/测试用例的精确位置（行列 + 字符偏移）、签名、参数、装饰器、文档注释、返回类型、圈复杂度等。
 - **项目浏览**：文件树 + 符号树（类→方法、嵌套函数）、搜索、源码/测试过滤、深链接（`/p/<id>?s=<symbolId>`）、浏览器前进/后退。
 - **只读源码**：Monaco Editor（本地打包、无 CDN 依赖；加载失败自动回退到简易查看器），可切换“仅方法 / 整个文件”，行号保持原文件行号。
@@ -372,6 +372,14 @@ node --experimental-strip-types tools/benchmark-search.ts
 同包类型、源码目录导入、继承及方法调用标为推断；同类同名重载保留全部候选，不按方法名选择第一个。当前不执行 javac、不解析 Maven/Gradle 依赖，不做完整参数类型/泛型推导、虚方法动态分派、Lombok 生成代码或反射分析。无方法体的声明只保留所属类型，匿名类与 lambda 内部逻辑不展开，finally 路径沿用简化控制流。
 
 验证：node --test tests/java.test.ts；启动本地应用后运行 node --test tests/java.integration.test.mjs。
+
+## C# 支持
+
+支持 .cs 的类、接口、结构体、记录、枚举，以及带方法体或表达式体的方法、构造方法和局部函数。提取特性、`///` 文档注释、参数、继承、`using` / `using static` / 别名、流程图和变量。识别 xUnit Fact / Theory、NUnit Test / TestCase 与 MSTest TestMethod；项目总览可识别 static Main，以及 ASP.NET `[Route]` 与 `[HttpGet]` 等字面量路由。`bin` 与 `obj` 目录在导入时跳过。
+
+同一命名空间的类型、`using` 导入的类型、继承和方法调用标为推断；同类型同名重载保留全部候选。`using static` 按命名空间路径后缀匹配源码文件。不读取 csproj、不执行编译、不解析 NuGet 依赖，也不做参数类型、泛型、可空注解或虚方法分派推导。无方法体的接口/抽象声明只保留所属类型；lambda、匿名方法、属性访问器、终结器、运算符和顶层语句不展开。块状嵌套命名空间只记录最外层名称。弃用筛选仍认 `@deprecated` / `@Deprecated`，`[Obsolete]` 需用注解文本搜索。
+
+验证：node --test tests/csharp.test.ts；启动本地应用后运行 node --test tests/csharp.integration.test.mjs。
 
 ## Vue 支持
 

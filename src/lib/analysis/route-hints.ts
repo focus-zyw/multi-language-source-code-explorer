@@ -23,20 +23,21 @@ function literals(expression: string): string[] {
 
 function pathsOf(text: string): string[] {
   const args = text.slice(text.indexOf("(") + 1, text.lastIndexOf(")") >= 0 ? text.lastIndexOf(")") : undefined);
-  const named = /(?:^|,)\s*(?:path|value)\s*=\s*([\s\S]*)/.exec(args);
+  const named = /(?:^|,)\s*(?:path|value|template)\s*[:=]\s*([\s\S]*)/.exec(args);
   return literals(named?.[1] ?? args);
 }
 
 export function routeHint(decorators: string[], path: string, parentDecorators: string[] = []): RouteHint | null {
-  const java = path.endsWith(".java"), python = path.endsWith(".py"), typescript = /\.[cm]?[jt]sx?$/.test(path);
+  const java = path.endsWith(".java"), python = path.endsWith(".py"), csharp = path.endsWith(".cs"), typescript = /\.[cm]?[jt]sx?$/.test(path);
   const routes = decorators.filter((value) => java ? /^@(?:[\w.]*\.)?(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\b/.test(value)
     : python ? /^@(?:\w+\.)+(?:route|get|post|put|patch|delete|head|options|websocket)\s*\(/.test(value)
+    : csharp ? /^\[(?:[\w.]+\.)?(?:Http(?:Get|Post|Put|Patch|Delete|Head|Options)|Route)\b/.test(value)
     : typescript && /^@(?:[\w.]*\.)?(?:Get|Post|Put|Patch|Delete|Head|Options|All)\s*\(/.test(value));
   if (!routes.length) return null;
   const methods = new Set<string>(), paths = new Set<string>(); let partial = false;
   for (const route of routes) {
-    const name = /^@([\w.]+)/.exec(route)?.[1].split(".").at(-1) ?? "";
-    const verb = name.replace(/Mapping$/, "").toLowerCase();
+    const name = /^[@[]([\w.]+)/.exec(route)?.[1].split(".").at(-1) ?? "";
+    const verb = name.replace(/Mapping$/, "").replace(/^Http/, "").toLowerCase();
     if (VERBS[verb]) methods.add(VERBS[verb]);
     else {
       const javaMethods = [...route.matchAll(/RequestMethod\.(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/g)].map((match) => match[1]);
@@ -50,7 +51,7 @@ export function routeHint(decorators: string[], path: string, parentDecorators: 
     else partial = true;
     if (!route.endsWith(")")) partial = true;
   }
-  const prefixDecorator = parentDecorators.find((value) => java ? /^@(?:[\w.]*\.)?RequestMapping\b/.test(value) : typescript && /^@(?:[\w.]*\.)?Controller\s*\(/.test(value));
+  const prefixDecorator = parentDecorators.find((value) => java ? /^@(?:[\w.]*\.)?RequestMapping\b/.test(value) : csharp ? /^\[(?:[\w.]+\.)?Route\b/.test(value) : typescript && /^@(?:[\w.]*\.)?Controller\s*\(/.test(value));
   let result = [...paths];
   if (prefixDecorator) {
     const prefixes = pathsOf(prefixDecorator);

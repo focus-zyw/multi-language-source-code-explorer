@@ -1,5 +1,5 @@
 export const SEARCH_KINDS = ["function", "method", "class", "test", "element", "property"] as const;
-export const SEARCH_LANGUAGES = ["python", "javascript", "typescript", "java", "go", "vue", "html", "json"] as const;
+export const SEARCH_LANGUAGES = ["python", "javascript", "typescript", "java", "csharp", "go", "vue", "html", "json"] as const;
 export const SEARCH_SORTS = ["path", "name", "complexity", "loc", "params", "exactCallers"] as const;
 export const SEARCH_NUMBERS = ["minCc", "maxCc", "minLoc", "maxLoc", "minParams", "maxParams", "minExactCallers"] as const;
 export const SEARCH_FIELDS = ["q", "path", "kind", "language", "decorator", "base", "deprecated", "scope", "page", "sort", "order", "methodsOnly", ...SEARCH_NUMBERS] as const;

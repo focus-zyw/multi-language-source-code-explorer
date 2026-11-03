@@ -112,7 +112,10 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   for (const fileRecs of recs) for (const rec of fileRecs) recById.set(rec.id, rec);
   const sameLanguage = (a: number, b: number) => files[a].language === files[b].language || ["javascript", "typescript", "vue"].includes(files[a].language) && ["javascript", "typescript", "vue"].includes(files[b].language);
   const sameGoPackage = (a: number, b: number) => files[a].language === "go" && files[b].language === "go" && dirOf(files[a].path) === dirOf(files[b].path) && !!files[a].extract.moduleName && files[a].extract.moduleName === files[b].extract.moduleName;
-  const sameJavaPackage = (a: number, b: number) => files[a].language === "java" && files[b].language === "java" && files[a].extract.moduleName !== undefined && files[a].extract.moduleName === files[b].extract.moduleName;
+  const sameDeclaredNamespace = (a: number, b: number) => {
+    const left = files[a], right = files[b];
+    return (left.language === "java" || left.language === "csharp") && left.language === right.language && left.extract.moduleName !== undefined && left.extract.moduleName === right.extract.moduleName;
+  };
   const infos: FileInfo[] = files.map((f) => {
     const info: FileInfo = {
       top: new Map(),
@@ -217,11 +220,11 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
     if (name === "default") return fx.defaultRec ? { rec: fx.defaultRec, level: "exact" } : null;
     const top = fx.top.get(name)?.[0];
     if (top) return { rec: top, level: "exact" };
-    if (files[fi].language === "go" || files[fi].language === "java") {
-      const siblings = (globalTop.get(name) ?? []).filter((r) => r.fileIdx !== fi && (sameGoPackage(fi, r.fileIdx) || sameJavaPackage(fi, r.fileIdx)));
+    if (files[fi].language === "go" || files[fi].language === "java" || files[fi].language === "csharp") {
+      const siblings = (globalTop.get(name) ?? []).filter((r) => r.fileIdx !== fi && (sameGoPackage(fi, r.fileIdx) || sameDeclaredNamespace(fi, r.fileIdx)));
       if (siblings.length === 1) return { rec: siblings[0], level: "inferred" };
     }
-    if (files[fi].language === "java") {
+    if (files[fi].language === "java" || files[fi].language === "csharp") {
       const staticMethods = recs[fi].filter((r) => r.sym.kind === "method" && r.sym.name === name && /\bstatic\b/.test(r.sym.signature));
       if (staticMethods.length === 1) return { rec: staticMethods[0], level: "inferred" };
     }
@@ -258,7 +261,12 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
         if (hit && hit.rec.sym.kind === "class") return { rec: hit.rec, level: "inferred" };
       }
     }
-    const packageClasses = (globalClasses.get(name) ?? []).filter((r) => sameGoPackage(fi, r.fileIdx) || sameJavaPackage(fi, r.fileIdx));
+    if (files[fi].language === "csharp") {
+      const namespaces = new Set(fx.wildcards.filter((binding) => binding.localPath !== "*static").map((binding) => binding.specifier));
+      const imported = (globalClasses.get(name) ?? []).filter((r) => files[r.fileIdx].language === "csharp" && namespaces.has(files[r.fileIdx].extract.moduleName ?? "\0"));
+      if (imported.length === 1) return { rec: imported[0], level: "inferred" };
+    }
+    const packageClasses = (globalClasses.get(name) ?? []).filter((r) => sameGoPackage(fi, r.fileIdx) || sameDeclaredNamespace(fi, r.fileIdx));
     if (packageClasses.length === 1) return { rec: packageClasses[0], level: "inferred" };
     const g = globalClasses.get(name)?.filter((r) => sameLanguage(fi, r.fileIdx));
     if (g && g.length === 1) return { rec: g[0], level: "heuristic" };
@@ -299,7 +307,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
       if (h) return h;
       cur = cur.parentLocalId !== null ? syms[cur.parentLocalId] : null;
     }
-    if (files[fi].language === "java" && owner.classLocalId !== null) return fx.fieldHints.get(owner.classLocalId)?.get(variable) ?? null;
+    if ((files[fi].language === "java" || files[fi].language === "csharp") && owner.classLocalId !== null) return fx.fieldHints.get(owner.classLocalId)?.get(variable) ?? null;
     return null;
   };
 
@@ -382,7 +390,7 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
 
     /* ---------- 无接收者：直接名称 ---------- */
     if (call.receiverKind === null) {
-      if (f.language === "java" && call.kind !== "new" && owner.classLocalId !== null) {
+      if ((f.language === "java" || f.language === "csharp") && call.kind !== "new" && owner.classLocalId !== null) {
         const method = lookupMethod(recs[fi][owner.classLocalId], name);
         if (method && "rec" in method) return hit(fi, method.rec, minLevel("inferred", method.level), "按所属类与可解析的继承关系推断方法");
       }
@@ -590,12 +598,12 @@ export function resolveProject(files: FileUnit[], symbolIds: number[][]): Resolv
   for (const f of files) {
     for (const call of f.extract.calls) {
       let o = resolveCall(f.idx, call);
-      if (f.language === "java" && o.targets.length === 1 && o.resolution !== "heuristic") {
+      if ((f.language === "java" || f.language === "csharp") && o.targets.length === 1 && o.resolution !== "heuristic") {
         const picked = recById.get(o.targets[0].symbolId);
         if (picked?.sym.kind === "method") {
           const overloads = (picked.sym.container === null ? recs[picked.fileIdx] : infos[picked.fileIdx].byContainer.get(picked.sym.container)?.get(picked.sym.name) ?? [])
             .filter((r) => r.sym.name === picked.sym.name && r.sym.container === picked.sym.container && r.sym.kind === "method");
-          if (overloads.length > 1) o = { resolution: "heuristic", reason: "存在多个同名重载；尚未进行 Java 参数类型与泛型推导，以下均为候选", targets: overloads.map((r) => target(r, "heuristic", r.sym.signature)) };
+          if (overloads.length > 1) o = { resolution: "heuristic", reason: `存在多个同名重载；尚未进行 ${f.language === "java" ? "Java" : "C#"} 参数类型与泛型推导，以下均为候选`, targets: overloads.map((r) => target(r, "heuristic", r.sym.signature)) };
           else if (call.kind !== "new") o = { ...o, resolution: "inferred", targets: o.targets.map((t) => ({ ...t, confidence: "inferred", score: 0.75 })) };
         }
       }

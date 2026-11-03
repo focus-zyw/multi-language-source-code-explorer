@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
       "./node_modules/tree-sitter-wasms/out/tree-sitter-tsx.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-go.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-java.wasm",
+      "./node_modules/tree-sitter-wasms/out/tree-sitter-c_sharp.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-vue.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-html.wasm",
       "./node_modules/tree-sitter-wasms/out/tree-sitter-json.wasm",

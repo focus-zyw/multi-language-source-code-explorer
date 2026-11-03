@@ -7,6 +7,7 @@ import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution"
 import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution";
 import "monaco-editor/esm/vs/basic-languages/go/go.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
+import "monaco-editor/esm/vs/basic-languages/csharp/csharp.contribution";
 import "monaco-editor/esm/vs/basic-languages/html/html.contribution";
 import { sliceLines, type CodeViewerProps, type ViewerRef } from "./viewer-types";
 

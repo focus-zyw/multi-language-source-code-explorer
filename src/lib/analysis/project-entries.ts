@@ -32,11 +32,12 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
   for (const item of symbols) {
     const file = byFile.get(item.fileId);
     if (!file || item.isTest || file.isTest || /(^|\/)(?:tests?|__tests__|fixtures|__fixtures__)(\/|$)/i.test(file.path.replaceAll("\\", "/"))) continue;
-    const javaMethod = /\.java$/.test(file.path) && item.kind === "method" && item.name !== "constructor";
-    const parent = item.parentId === null ? undefined : bySymbol.get(item.parentId);
-    const route = routeHint(item.decorators, file.path.replaceAll("\\", "/"), parent?.kind === "class" ? parent.decorators : []);
-    if ((item.parentId !== null || item.kind !== "function") && !javaMethod && !(item.kind === "method" && route)) continue;
     const path = file.path.replaceAll("\\", "/");
+    const javaMethod = path.endsWith(".java") && item.kind === "method" && item.name !== "constructor";
+    const csharpMethod = path.endsWith(".cs") && item.kind === "method" && item.name !== "constructor";
+    const parent = item.parentId === null ? undefined : bySymbol.get(item.parentId);
+    const route = routeHint(item.decorators, path, parent?.kind === "class" ? parent.decorators : []);
+    if ((item.parentId !== null || item.kind !== "function") && !javaMethod && !csharpMethod && !(item.kind === "method" && route)) continue;
     const base = path.split("/").at(-1)!;
     const isDefault = /^export\s+default\b/.test(item.signature);
     const exported = /^export\s/.test(item.signature);
@@ -49,6 +50,8 @@ export function identifyProjectEntries(files: EntryFile[], symbols: EntrySymbol[
       group = "pages"; reason = "Vue 单文件组件入口；包含脚本初始化与模板静态绑定，不表示具体挂载顺序";
     } else if (javaMethod && item.name === "main" && /\bstatic\s+void\s+main\s*\(/.test(item.signature)) {
       group = "startup"; reason = "按 Java static void main 方法签名识别，未验证构建配置"; confidence = "heuristic";
+    } else if (csharpMethod && item.name === "Main" && /\bstatic\b/.test(item.signature)) {
+      group = "startup"; reason = "按 C# static Main 方法签名识别，未验证项目文件或启动对象"; confidence = "heuristic";
     } else if (route) {
       group = "api";
       reason = `${route.methods.join(" / ")} · ${route.paths.length ? route.paths.map((value) => value || "/").join("、") : "路径表达式无法静态确定"}${route.partial ? "（信息不完整，路径可能只是片段）" : ""}；${route.note}；依据：${route.evidence.join("；")}`;

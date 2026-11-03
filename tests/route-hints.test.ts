@@ -35,6 +35,7 @@ test("real extracted Java, Python and TypeScript route annotations feed navigati
     ["Controller.java", '@RequestMapping("/api") class Controller { @GetMapping("/items") public String items() { return "ok"; } }', "/api/items"],
     ["app.py", '@router.get("/items")\ndef items():\n  return 1\n', "/items"],
     ["controller.ts", '@Controller("api")\nexport class Controller { @Get("items") items() { return 1; } }', "/api/items"],
+    ["Controller.cs", '[Route("/api")]\nclass Controller { [HttpGet("/items")] public string Items() { return "ok"; } }', "/api/items"],
   ]) {
     const plugin = pluginForPath(path)!;
     const tree = await parseSource(plugin.grammar, source); assert.ok(tree);
